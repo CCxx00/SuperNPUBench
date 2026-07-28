@@ -1,0 +1,8 @@
+#!/bin/bash
+# Multi-thread GMMA FlashAttention operator.
+
+: "${COMPILER_DIR:?Set COMPILER_DIR to the Linx compiler bin directory}"
+
+make TESTCASE=fa_2d_unroll_gmma \
+    COMPILER_DIR="$COMPILER_DIR" \
+    Sq=512 Skv=512 Tm=128 Tk=128
