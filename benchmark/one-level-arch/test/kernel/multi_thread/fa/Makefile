@@ -15,4 +15,4 @@ DEFINES += -DTk=$(Tk)
 SRC_FILE += $(TEST_ROOT)/$(CASE_SRC_DIR)/fa_2d_unroll_gmma.cpp
 TARGET = $(ELF_HEAD)_Sq$(Sq)_Skv$(Skv)_Tm$(Tm)_Tk$(Tk).elf
 
-include ../../common/Makefile.common
+include ../../../common/Makefile.common
