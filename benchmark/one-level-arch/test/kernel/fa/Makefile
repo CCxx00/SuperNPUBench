@@ -1,4 +1,17 @@
-# fa testcases: fa_HIF4_HIF4, fa_2d_unroll
+# fa testcases: fa_HIF4_HIF4, fa_2d_unroll, sfa
+
+ifeq ($(TESTCASE), sfa)
+   SRC_FILE += $(TEST_ROOT)/$(CASE_SRC_DIR)/sfa.cpp
+   Sq ?= 256
+   Skv ?= 512
+   Tm ?= 16
+   Tk ?= 32
+   DEFINES += -DTsq=$(Sq)
+   DEFINES += -DTskv=$(Skv)
+   DEFINES += -DTm=$(Tm)
+   DEFINES += -DTk=$(Tk)
+   TARGET = $(ELF_HEAD)/$(TESTCASE)_Sq$(Sq)_Skv$(Skv)_Tm$(Tm)_Tk$(Tk).elf
+endif
 
 ifeq ($(TESTCASE), fa_HIF4_HIF4)
    SRC_FILE += $(TEST_ROOT)/$(CASE_SRC_DIR)/fa_hif4.cpp

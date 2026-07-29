@@ -20,6 +20,7 @@ for type/dimension parameterization.
 - `fa_unalign_2d_unroll.hpp` — unaligned boundary (seq len not a multiple of tile).
 - `fa_hif4.hpp` — HIF4 quantized.
 - `fa_dcore.hpp` — DCore-optimized.
+- `sfa_pto.hpp` — Sparse Flash Attention (block-sparse / CSR pattern), two-pass PTO variant.
 - `fa_utils.h` / `fa_fp4_utils.h` — shared helpers.
 
 > Note: in `one-level-arch`, `*_pto.hpp` files are PTO-style variants kept
