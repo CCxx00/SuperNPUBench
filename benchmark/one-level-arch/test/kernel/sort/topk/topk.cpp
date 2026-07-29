@@ -1,7 +1,7 @@
 #include <common/pto_tileop.hpp>
+#include <jcore/TExpandScalar.hpp>
 #include "benchmark.h"
 #include "fileop.h"
-#include "template_asm.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -46,7 +46,7 @@ int main() {
     // Phase 1: SIMT high8 histogram (1 block × 256 lanes, each lane = 1 bucket)
     // -------------------------------------------------------------------------
     TileU32 high8HistTile;
-    TEXPANDSCALAR(high8HistTile, static_cast<uint32_t>(0));
+    TEXPANDSCALAR_Impl(high8HistTile, static_cast<uint32_t>(0));
     ExtractHigh8Hist_Impl< TileU32 >(high8HistTile, g_input);
 
     // Copy histogram results out and reduce to global 256-bin histogram
@@ -86,7 +86,7 @@ int main() {
     // Phase 3: SIMT low8 histogram for kth_bin elements
     // -------------------------------------------------------------------------
     TileU32 low8HistTile;
-    TEXPANDSCALAR(low8HistTile, static_cast<uint32_t>(0));
+    TEXPANDSCALAR_Impl(low8HistTile, static_cast<uint32_t>(0));
     ExtractLow8HistForKthBin_Impl< TileU32 >(low8HistTile, g_input,
                                              static_cast<uint16_t>(kth_bin));
 

@@ -59,6 +59,7 @@ compile_operator "$REPO_ROOT/test/kernel/reduction/reducesum_row" "reducesum_row
 compile_operator "$REPO_ROOT/test/kernel/control" "control"
 compile_operator "$REPO_ROOT/test/kernel/fa" "fa"
 compile_operator "$REPO_ROOT/test/kernel/sort" "sort"
+compile_operator "$REPO_ROOT/test/kernel/deepseek" "deepseek"
 
 echo ""
 echo "=========================================="
