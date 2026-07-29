@@ -22,7 +22,7 @@ using namespace pto;
 #endif
 
 #ifndef tilN
-#define tilN 128
+#define tilN 64
 #endif
 
 #ifndef tilK
@@ -62,18 +62,17 @@ using namespace pto;
 //     only its own accumulator C_pe [tM, tN].
 template <typename dtype, int gM, int gN, int gK, int tM, int tN, int tK>
 void matmul_multithread(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
-    constexpr int kPeTileElemLimit = 8 * 1024;
-    constexpr int kSharedTileElemLimit = 32 * 1024;
+    constexpr int kTileElemLimit = 8 * 1024;
 
     static_assert(gM % tM == 0, "M must be divisible by tM");
     static_assert(gN % tN == 0, "N must be divisible by tN");
     static_assert(gK % tK == 0, "K must be divisible by tK");
-    static_assert(tM * tK <= kPeTileElemLimit,
-                  "each PE A tile must fit into 8K elements");
-    static_assert(tM * tN <= kPeTileElemLimit,
-                  "each PE C tile must fit into 8K elements");
-    static_assert(tK * tN <= kSharedTileElemLimit,
-                  "shared B tile must fit into 32K elements");
+    static_assert(tM * tK < kTileElemLimit,
+                  "each PE A tile must be smaller than 8K elements");
+    static_assert(tM * tN < kTileElemLimit,
+                  "each PE C tile must be smaller than 8K elements");
+    static_assert(tK * tN < kTileElemLimit,
+                  "shared B tile must be smaller than 8K elements");
 
     const uint32_t tid = get_thread_id();
 

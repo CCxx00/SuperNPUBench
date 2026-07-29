@@ -23,6 +23,9 @@ using namespace pto;
 
 template <int Rows, int Cols>
 void vec_multithread(float* out_ptr, float* a_ptr, float* b_ptr) {
+    static_assert(Rows * Cols < 8 * 1024,
+                  "each PE vector tile must be smaller than 8K elements");
+
     using tileT = Tile<Location::Vec, float, Rows, Cols, BLayout::RowMajor>;
     using gmIn = global_tensor<float, RowMajor<Rows, Cols>>;
     using gmOut = global_tensor<float, RowMajor<Rows, Cols>>;

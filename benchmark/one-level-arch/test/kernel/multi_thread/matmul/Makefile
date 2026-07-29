@@ -7,8 +7,20 @@ M ?= 256
 N ?= 256
 K ?= 256
 tM ?= 64
-tN ?= 128
+tN ?= 64
 tK ?= 64
+
+TILE_ELEM_LIMIT := 8192
+TILE_SHAPE_VALID := $(shell \
+	test $(tM) -gt 0 && test $(tN) -gt 0 && test $(tK) -gt 0 && \
+	test $$(( $(tM) * $(tK) )) -lt $(TILE_ELEM_LIMIT) && \
+	test $$(( $(tK) * $(tN) )) -lt $(TILE_ELEM_LIMIT) && \
+	test $$(( $(tM) * $(tN) )) -lt $(TILE_ELEM_LIMIT) && \
+	echo yes)
+
+ifneq ($(TILE_SHAPE_VALID),yes)
+$(error Invalid matmul tile shape: require tM*tK, tK*tN, and tM*tN to each be < 8192 elements; got tM=$(tM), tN=$(tN), tK=$(tK))
+endif
 
 DEFINES += -DBatch=$(B)
 DEFINES += -DglobM=$(M)

@@ -5,4 +5,4 @@
 
 make TESTCASE=fa_2d_unroll_gmma \
     COMPILER_DIR="$COMPILER_DIR" \
-    Sq=512 Skv=512 Tm=128 Tk=128
+    Sq=128 Skv=64 Tm=32 Tk=32

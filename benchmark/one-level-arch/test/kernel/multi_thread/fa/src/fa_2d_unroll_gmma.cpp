@@ -56,8 +56,7 @@ using SharedTile = TileRight<dtype, Rows, Cols, ValidRows, ValidCols>;
 //
 // Compute contract:
 //   - Each PE independently executes vector tileOPs for its [kTm, *] slice.
-//   - This file uses the 8K-elements interpretation for the per-PE tile limit.
-//     Union TMATMUL operands may use the collective 32K-element capacity.
+//   - Every physical tile is constrained to fewer than 8K elements.
 //   - tmatmul is a compiler intrinsic used as a scalar instruction in each PE's
 //     program. Each PE passes only its own lhs/acc tile, while K/V are shared
 //     staging tiles. The collective execution fuses the PE-local slices into
@@ -81,23 +80,20 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
     //   current PE M slice: kTm
     //   collective big M  : 4 * kTm
     constexpr int kPaddedQ = (qD == 192 ? 256 : qD);
-    // Per-PE small tile budget and collective big-tile budget.
-    // This file chooses the "8K elements" interpretation mentioned in the
-    // programming model. With 4 PEs, a collective operand may cover 32K elems.
-    constexpr int kPeTileElemLimit = 8 * 1024;
-    constexpr int kUnionTileElemLimit = 4 * kPeTileElemLimit;
+    // All PE-local and shared physical tiles must stay below 8K elements.
+    constexpr int kTileElemLimit = 8 * 1024;
 
     // tile validity check
-    static_assert(kTm * kPaddedQ <= kPeTileElemLimit,
-                  "each PE Q tile must fit into 8K elements");
-    static_assert(kTm * kTk <= kPeTileElemLimit,
-                  "each PE score tile must fit into 8K elements");
-    static_assert(kTm * vD <= kPeTileElemLimit,
-                  "each PE output tile must fit into 8K elements");
-    static_assert(kTk * kPaddedQ <= kUnionTileElemLimit,
-                  "shared K tile must fit into 32K union elements");
-    static_assert(kTk * vD <= kUnionTileElemLimit,
-                  "shared V tile must fit into 32K union elements");
+    static_assert(kTm * kPaddedQ < kTileElemLimit,
+                  "each PE Q tile must be smaller than 8K elements");
+    static_assert(kTm * kTk < kTileElemLimit,
+                  "each PE score tile must be smaller than 8K elements");
+    static_assert(kTm * vD < kTileElemLimit,
+                  "each PE output tile must be smaller than 8K elements");
+    static_assert(kTk * kPaddedQ < kTileElemLimit,
+                  "shared K tile must be smaller than 8K elements");
+    static_assert(kTk * vD < kTileElemLimit,
+                  "shared V tile must be smaller than 8K elements");
 
     // Global tensor layout. All four tensors are RowMajor so TLOAD/TSTORE can
     // remain pure ND-to-ND copies:
@@ -376,13 +372,13 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
 #define vD 128
 
 #ifndef Tm
-#define kTm 128
+#define kTm 32
 #else
 #define kTm Tm
 #endif
 
 #ifndef Tk
-#define kTk 128
+#define kTk 32
 #else
 #define kTk Tk
 #endif
