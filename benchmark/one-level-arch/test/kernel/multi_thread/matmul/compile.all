@@ -6,4 +6,4 @@
 make TESTCASE=matmul \
     COMPILER_DIR="$COMPILER_DIR" \
     B=1 M=256 N=256 K=256 \
-    tM=64 tN=64 tK=64
+    tM=32 tN=32 tK=32

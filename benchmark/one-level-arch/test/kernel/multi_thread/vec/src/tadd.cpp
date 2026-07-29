@@ -31,7 +31,7 @@ void vec_multithread(float* out_ptr, float* a_ptr, float* b_ptr) {
     using gmOut = global_tensor<float, RowMajor<Rows, Cols>>;
     using itIn = global_iterator<gmIn, tileT>;
     using itOut = global_iterator<gmOut, tileT>;
-    uint32_t tid = get_thread_id();
+    uint32_t tid = get_thread_idx();
     uint32_t gm_offset = tid * Rows*Cols;
 
     tileT tA;

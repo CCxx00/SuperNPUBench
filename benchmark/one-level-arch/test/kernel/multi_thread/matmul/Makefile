@@ -6,20 +6,21 @@ B ?= 1
 M ?= 256
 N ?= 256
 K ?= 256
-tM ?= 64
-tN ?= 64
-tK ?= 64
+tM ?= 32
+tN ?= 32
+tK ?= 32
 
-TILE_ELEM_LIMIT := 8192
+DTYPE_BYTES := 4
+TILE_BYTE_LIMIT := 8192
 TILE_SHAPE_VALID := $(shell \
 	test $(tM) -gt 0 && test $(tN) -gt 0 && test $(tK) -gt 0 && \
-	test $$(( $(tM) * $(tK) )) -lt $(TILE_ELEM_LIMIT) && \
-	test $$(( $(tK) * $(tN) )) -lt $(TILE_ELEM_LIMIT) && \
-	test $$(( $(tM) * $(tN) )) -lt $(TILE_ELEM_LIMIT) && \
+	test $$(( $(tM) * $(tK) * $(DTYPE_BYTES) )) -lt $(TILE_BYTE_LIMIT) && \
+	test $$(( $(tK) * $(tN) * $(DTYPE_BYTES) )) -lt $(TILE_BYTE_LIMIT) && \
+	test $$(( $(tM) * $(tN) * $(DTYPE_BYTES) )) -lt $(TILE_BYTE_LIMIT) && \
 	echo yes)
 
 ifneq ($(TILE_SHAPE_VALID),yes)
-$(error Invalid matmul tile shape: require tM*tK, tK*tN, and tM*tN to each be < 8192 elements; got tM=$(tM), tN=$(tN), tK=$(tK))
+$(error Invalid FP32 matmul tile shape: require tM*tK*4, tK*tN*4, and tM*tN*4 to each be < 8192 bytes; got tM=$(tM), tN=$(tN), tK=$(tK))
 endif
 
 DEFINES += -DBatch=$(B)

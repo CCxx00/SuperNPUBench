@@ -18,15 +18,15 @@ using namespace pto;
 #endif
 
 #ifndef tilM
-#define tilM 64
+#define tilM 32
 #endif
 
 #ifndef tilN
-#define tilN 64
+#define tilN 32
 #endif
 
 #ifndef tilK
-#define tilK 64
+#define tilK 32
 #endif
 
 #ifndef Batch
@@ -48,7 +48,7 @@ using namespace pto;
 //   - B is one shared matrix with shape [gK, gN].
 //
 // Thread/PE mapping:
-//   - get_thread_id() selects one complete A/C matrix from those arrays.
+//   - get_thread_idx() selects one complete A/C matrix from those arrays.
 //   - The kernel's gM and tM are already PE-local dimensions; no further
 //     row splitting occurs inside the kernel.
 //   - B is not split. TLOAD places a complete [tK, tN] rhs tile in shared
@@ -62,19 +62,19 @@ using namespace pto;
 //     only its own accumulator C_pe [tM, tN].
 template <typename dtype, int gM, int gN, int gK, int tM, int tN, int tK>
 void matmul_multithread(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
-    constexpr int kTileElemLimit = 8 * 1024;
+    constexpr int kTileByteLimit = 8 * 1024;
 
     static_assert(gM % tM == 0, "M must be divisible by tM");
     static_assert(gN % tN == 0, "N must be divisible by tN");
     static_assert(gK % tK == 0, "K must be divisible by tK");
-    static_assert(tM * tK < kTileElemLimit,
-                  "each PE A tile must be smaller than 8K elements");
-    static_assert(tM * tN < kTileElemLimit,
-                  "each PE C tile must be smaller than 8K elements");
-    static_assert(tK * tN < kTileElemLimit,
-                  "shared B tile must be smaller than 8K elements");
+    static_assert(tM * tK * sizeof(dtype) < kTileByteLimit,
+                  "each PE A tile must be smaller than 8 KB");
+    static_assert(tM * tN * sizeof(float) < kTileByteLimit,
+                  "each PE C tile must be smaller than 8 KB");
+    static_assert(tK * tN * sizeof(dtype) < kTileByteLimit,
+                  "shared B tile must be smaller than 8 KB");
 
-    const uint32_t tid = get_thread_id();
+    const uint32_t tid = get_thread_idx();
 
     // A/C are arrays of PE matrices. Select one complete matrix before
     // constructing the PE-local global iterators. B keeps its shared base.
@@ -133,7 +133,7 @@ void matmul_multithread(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
 
             // Convert and store only the current PE's C row slice.
             tileC tC;
-            ACCCVT(tC, tCAcc);
+            TCVT(tC, tCAcc);
             auto gC = gIterC(i, j);
             TSTORE(gC, tC);
         }

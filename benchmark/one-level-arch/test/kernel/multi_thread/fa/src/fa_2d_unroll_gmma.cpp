@@ -17,7 +17,7 @@ using SharedTile = TileRight<dtype, Rows, Cols, ValidRows, ValidCols>;
 
 // 4-PE tmatmul FlashAttention programming model.
 //
-// This kernel models a Blackwell-like execution style where get_thread_id()
+// This kernel models a Blackwell-like execution style where get_thread_idx()
 // selects the current PE's Q/O row range. Each PE owns one Q/O row slice of kTm rows,
 // while K/V are loaded as full shared tiles and the union TMATMUL
 // call consumes the PE-local Q/P tiles with those shared K/V operands.
@@ -71,11 +71,11 @@ template <typename dtype, int Sq, int Skv, int qD, int vD, int kTm, int kTk,
           int scaleD = qD>
 void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
                                         dtype *k_ptr, dtype *v_ptr) {
-    const uint32_t tid = get_thread_id();
+    const uint32_t tid = get_thread_idx();
     q_ptr += tid * Sq * qD;
     out_ptr += tid * Sq * vD;
 
-    // This function receives the full Q/O base pointer. get_thread_id() selects
+    // This function receives the full Q/O base pointer. get_thread_idx() selects
     // the current PE's local Q/O row range before any tile iterator is built.
     //   current PE M slice: kTm
     //   collective big M  : 4 * kTm
@@ -242,7 +242,7 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
             // 对应指令gmma，4-PE发送4条gmma指令，
             TMATMUL(tQ, tK, tWAcc);
             // Nz->Dn
-            ACCCVT(tW, tWAcc);
+            TCVT(tW, tWAcc);
             TMULS(tW, tW, scale);
 
             tileMax tNewMax;
@@ -320,7 +320,7 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
             //     tO = tO * exp(m_old - m_new) + tPV
             //
             // TROWEXPANDMUL broadcasts tScale [kTm,1] across vD.
-            ACCCVT(tPV, tPVAcc);
+            TCVT(tPV, tPVAcc);
 
             if (j == 0) {
                 tO = tPV;
@@ -412,7 +412,7 @@ int main() {
     for (int i = 0; i < B; i++) {
         for (int j = 0; j < H; j++) {
             // SMT-4 M-split:
-            //   get_thread_id() in the kernel maps tid 0..3 to four PE slices.
+            //   get_thread_idx() in the kernel maps tid 0..3 to four PE slices.
             //   Each thread processes Sq/4 rows of Q/O.
             //   K/V are not split and remain full shared operands.
             flash_attention_2d_unroll_tmatmul_pto<dtype, Sq/4, Skv, qD, vD, kTm, kTk>(
