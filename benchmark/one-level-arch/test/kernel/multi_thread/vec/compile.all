@@ -3,7 +3,7 @@
 
 : "${COMPILER_DIR:?Set COMPILER_DIR to the Linx compiler bin directory}"
 
-make TESTCASE=vec \
+make TESTCASE=tadd \
     COMPILER_DIR="$COMPILER_DIR" \
     TileRows=16 TileCols=16
 
