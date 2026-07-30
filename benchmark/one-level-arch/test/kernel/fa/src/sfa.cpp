@@ -22,13 +22,13 @@
 #define vD 128
 
 #ifndef Tm
-#define kTm 16
+#define kTm 8
 #else
 #define kTm Tm
 #endif
 
 #ifndef Tk
-#define kTk 32
+#define kTk 16
 #else
 #define kTk Tk
 #endif

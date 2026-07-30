@@ -22,13 +22,13 @@ using namespace pto;
 #endif
 
 #ifndef Tm
-#define kTm 32
+#define kTm 8
 #else
 #define kTm Tm
 #endif
 
 #ifndef Tk
-#define kTk 64
+#define kTk 16
 #else
 #define kTk Tk
 #endif
@@ -55,8 +55,8 @@ template <int Sq_, int Skv_, int kTm_, int kTk_>
 void softmax_qk_2d_unroll_pto(float* out_ptr, float* score_ptr) {
     static_assert(Sq_ % kTm_ == 0, "Sq must be divisible by kTm");
     static_assert(Skv_ % kTk_ == 0, "Skv must be divisible by kTk");
-    static_assert(kTm_ * kTk_ * sizeof(float) <= 8 * 1024,
-                  "float score tile must not exceed 8KB per PE");
+    static_assert(kTm_ * kTk_ * sizeof(float) <= 4 * 1024,
+                  "float score tile must not exceed 4KB per PE");
 
     using gmScore = global_tensor<float, RowMajor<Sq_, Skv_>>;
     using gmOut = global_tensor<float, RowMajor<Sq_, Skv_>>;
