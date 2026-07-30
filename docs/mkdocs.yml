@@ -277,6 +277,9 @@ nav:
           - Fa HIF4 HIF4: benchmarks/catalog/one-level/fa/fa-hif4-86b1f297.md
           - Fa softmax pto: benchmarks/catalog/one-level/fa/fa-softmax-pto-c347f74a.md
           - Sfa: benchmarks/catalog/one-level/fa/sfa-c6ee8526.md
+      - Flashmla:
+          - Overview: benchmarks/catalog/one-level/flashmla/index.md
+          - FlashMLA: benchmarks/catalog/one-level/flashmla/flashmla-4a2fd331.md
       - Gather:
           - Overview: benchmarks/catalog/one-level/gather/index.md
           - Gather: benchmarks/catalog/one-level/gather/gather-4948597c.md
@@ -291,9 +294,11 @@ nav:
       - Multi Thread / Matmul:
           - Overview: benchmarks/catalog/one-level/multi-thread-matmul/index.md
           - Tiled matrix multiplication: benchmarks/catalog/one-level/multi-thread-matmul/matmul-fe4e636b.md
+          - Matmul partial: benchmarks/catalog/one-level/multi-thread-matmul/matmul-partial-1317b2f9.md
       - Multi Thread / Vec:
           - Overview: benchmarks/catalog/one-level/multi-thread-vec/index.md
-          - Vec: benchmarks/catalog/one-level/multi-thread-vec/tadd-3ea26abc.md
+          - Tadd: benchmarks/catalog/one-level/multi-thread-vec/tadd-3ea26abc.md
+          - Trowsum: benchmarks/catalog/one-level/multi-thread-vec/trowsum-1980973b.md
       - Reduction / Reducemax Col:
           - Overview: benchmarks/catalog/one-level/reduction-reducemax-col/index.md
           - Reducemax col: benchmarks/catalog/one-level/reduction-reducemax-col/reducemax-col-1c7de9cb.md

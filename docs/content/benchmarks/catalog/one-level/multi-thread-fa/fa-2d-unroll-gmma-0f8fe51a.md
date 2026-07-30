@@ -11,7 +11,7 @@
 
 ## Kernel structure
 
-The implementation loads or gathers global data into typed tiles, then executes matrix or matrix-vector work on cube/accumulator tiles, then reduces or broadcasts along tile axes, then applies vector elementwise arithmetic, then commits the result to global memory.
+The implementation loads or gathers global data into typed tiles, then reduces or broadcasts along tile axes, then applies vector elementwise arithmetic, then commits the result to global memory.
 
 ## Core kernel
 
@@ -40,36 +40,35 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
 
     constexpr int kPaddedQ = (qD == 192 ? 256 : qD);
 
-    constexpr int kTileElemLimit = 8 * 1024;
+    constexpr int kTileByteLimit = 8 * 1024;
 
-    static_assert(kTm * kPaddedQ < kTileElemLimit,
-                  "each PE Q tile must be smaller than 8K elements");
-    static_assert(kTm * kTk < kTileElemLimit,
-                  "each PE score tile must be smaller than 8K elements");
-    static_assert(kTm * vD < kTileElemLimit,
-                  "each PE output tile must be smaller than 8K elements");
-    static_assert(kTk * kPaddedQ < kTileElemLimit,
-                  "shared K tile must be smaller than 8K elements");
-    static_assert(kTk * vD < kTileElemLimit,
-                  "shared V tile must be smaller than 8K elements");
+    static_assert(kTm * kPaddedQ * sizeof(dtype) <= kTileByteLimit,
+                  "each PE Q tile must not exceed 8 KiB");
+    static_assert(kTm * kTk * sizeof(float) <= kTileByteLimit,
+                  "each PE score tile must not exceed 8 KiB");
+    static_assert(kTm * vD * sizeof(float) <= kTileByteLimit,
+                  "each PE output tile must not exceed 8 KiB");
+    static_assert(kTk * kPaddedQ * sizeof(dtype) <= kTileByteLimit,
+                  "shared K tile must not exceed 8 KiB");
+    static_assert(kTk * vD * sizeof(dtype) <= kTileByteLimit,
+                  "shared V tile must not exceed 8 KiB");
 
     using gmQ = global_tensor<dtype, RowMajor<Sq, qD>>;
-    using gmK = global_tensor<dtype, RowMajor<Skv, qD>>;
+
+    using gmK = global_tensor<dtype, ColMajor<qD, Skv>>;
     using gmV = global_tensor<dtype, RowMajor<Skv, vD>>;
     using gmO = global_tensor<dtype, RowMajor<Sq, vD>>;
 
     using tileQ = MatrixLeftTile<dtype, kTm, kPaddedQ, kTm, qD>;
-    using tileK = SharedTile<dtype, kTk, kPaddedQ, kTk, qD>;
+    using tileK = SharedTile<dtype, kPaddedQ, kTk, qD, kTk>;
     using tileV = SharedTile<dtype, kTk, vD>;
 
-    using tileWAcc = AccumulatorTile<float, kTm, kTk>;
     using tileW = LocalTile< float, kTm, kTk, BLayout::ColMajor>;
     using tileWCast = LocalTile< dtype,
                            kTm, kTk, BLayout::ColMajor>;
 
     using tilePLeft = MatrixLeftTile<dtype, kTm, kTk>;
 
-    using tileOAcc = AccumulatorTile<float, kTm, vD>;
     using tileO = LocalTile< float, kTm, vD, BLayout::ColMajor>;
     using tileOCast = LocalTile< dtype, kTm, vD, BLayout::ColMajor>;
 
@@ -92,8 +91,8 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
 
     const float scale = 1.0f / sqrt((float)scaleD);
 
-    const int Qb = (Sq + kTm - 1) / kTm;
-    const int Kb = (Skv + kTk - 1) / kTk;
+    constexpr int Qb = (Sq + kTm - 1) / kTm;
+    constexpr int Kb = (Skv + kTk - 1) / kTk;
 
     for (int i = 0; i < Qb; ++i) {
         tileQ tQ;
@@ -110,19 +109,17 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
         TEXPANDS(tMax, -1e30f);
         TEXPANDS(tSum, 0.0f);
 
+#pragma clang loop unroll(full)
         for (int j = 0; j < Kb; ++j) {
             tileK tK;
 
-            auto gK = gIterK(j, 0);
+            auto gK = gIterK(0, j);
 
             TLOAD(tK, gK);
 
-            tileWAcc tWAcc;
             tileW tW;
 
-            TMATMUL(tQ, tK, tWAcc);
-
-            TCVT(tW, tWAcc);
+            TMATMUL_FIXP(tW, tQ, tK);
             TMULS(tW, tW, scale);
 
             tileMax tNewMax;
@@ -150,12 +147,9 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
             TLOAD(tV, gV);
 
             tilePLeft tPLeft;
-            tileOAcc tPVAcc;
 
             TCVT(tPLeft, tExpW);
-            TMATMUL(tPLeft, tV, tPVAcc);
-
-            TCVT(tPV, tPVAcc);
+            TMATMUL_FIXP(tPV, tPLeft, tV);
 
             if (j == 0) {
                 tO = tPV;
@@ -198,13 +192,13 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
 #define vD 128
 
 #ifndef Tm
-#define kTm 32
+#define kTm 16
 #else
 #define kTm Tm
 #endif
 
 #ifndef Tk
-#define kTk 32
+#define kTk 16
 #else
 #define kTk Tk
 #endif
@@ -269,7 +263,6 @@ the spellings below use the canonical public operation names.
 | [`TEXP`](../../../../intrinsics/texp.md) | `TEXP` | `benchmark/one-level-arch/test/kernel/multi_thread/fa/src/fa_2d_unroll_gmma.cpp` |
 | [`TEXPANDS`](../../../../intrinsics/texpands.md) | `TEXPANDS` | `benchmark/one-level-arch/test/kernel/multi_thread/fa/src/fa_2d_unroll_gmma.cpp` |
 | [`TLOAD`](../../../../intrinsics/tload.md) | `TLOAD` | `benchmark/one-level-arch/test/kernel/multi_thread/fa/src/fa_2d_unroll_gmma.cpp` |
-| [`TMATMUL`](../../../../intrinsics/tmatmul.md) | `TMATMUL` | `benchmark/one-level-arch/test/kernel/multi_thread/fa/src/fa_2d_unroll_gmma.cpp` |
 | [`TMAX`](../../../../intrinsics/tmax.md) | `TMAX` | `benchmark/one-level-arch/test/kernel/multi_thread/fa/src/fa_2d_unroll_gmma.cpp` |
 | [`TMUL`](../../../../intrinsics/tmul.md) | `TMUL` | `benchmark/one-level-arch/test/kernel/multi_thread/fa/src/fa_2d_unroll_gmma.cpp` |
 | [`TMULS`](../../../../intrinsics/tmuls.md) | `TMULS` | `benchmark/one-level-arch/test/kernel/multi_thread/fa/src/fa_2d_unroll_gmma.cpp` |
@@ -281,6 +274,15 @@ the spellings below use the canonical public operation names.
 | [`TSTORE`](../../../../intrinsics/tstore.md) | `TSTORE` | `benchmark/one-level-arch/test/kernel/multi_thread/fa/src/fa_2d_unroll_gmma.cpp` |
 | [`TSUB`](../../../../intrinsics/tsub.md) | `TSUB` | `benchmark/one-level-arch/test/kernel/multi_thread/fa/src/fa_2d_unroll_gmma.cpp` |
 
+### Repository Helper Surface
+
+These uppercase calls are repository wrappers or fused helpers, not distinct
+entries in the public intrinsic reference.
+
+| Helper | Defined or called from |
+| --- | --- |
+| `TMATMUL_FIXP` | `benchmark/one-level-arch/test/kernel/multi_thread/fa/src/fa_2d_unroll_gmma.cpp` |
+
 ## Active Build Commands
 
 Run these from `benchmark/one-level-arch/test/kernel/multi_thread/fa` after setting
@@ -288,7 +290,7 @@ Run these from `benchmark/one-level-arch/test/kernel/multi_thread/fa` after sett
 
 | Manifest line | Command |
 | ---: | --- |
-| 6 | `make TESTCASE=fa_2d_unroll_gmma COMPILER_DIR="$COMPILER_DIR" Sq=128 Skv=64 Tm=32 Tk=32` |
+| 6 | `make TESTCASE=fa_2d_unroll_gmma COMPILER_DIR="$COMPILER_DIR" Sq=128 Skv=64 Tm=16 Tk=16` |
 
 ## Resolved source closure
 

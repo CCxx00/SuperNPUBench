@@ -102,26 +102,50 @@ void matmul_multithread(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
     for (int i = 0; i < Mb; ++i) {
         for (int j = 0; j < Nb; ++j) {
             tileCAcc tCAcc;
+            tileC tC;
 
-            for (int k = 0; k < Kb; ++k) {
+            if constexpr (Kb == 1) {
                 tileA tA;
                 tileB tB;
 
-                auto gA = gIterA(i, k);
+                auto gA = gIterA(i, 0);
                 TLOAD(tA, gA);
-
-                auto gB = gIterB(k, j);
+                auto gB = gIterB(0, j);
                 TLOAD(tB, gB);
+                TMATMUL_FIXP(tC, tA, tB);
+            } else {
 
-                if (k == 0) {
+                {
+                    tileA tA;
+                    tileB tB;
+                    auto gA = gIterA(i, 0);
+                    auto gB = gIterB(0, j);
+                    TLOAD(tA, gA);
+                    TLOAD(tB, gB);
                     TMATMUL(tCAcc, tA, tB);
-                } else {
+                }
+
+                for (int k = 1; k < Kb - 1; ++k) {
+                    tileA tA;
+                    tileB tB;
+                    auto gA = gIterA(i, k);
+                    auto gB = gIterB(k, j);
+                    TLOAD(tA, gA);
+                    TLOAD(tB, gB);
                     TMATMUL_ACC(tCAcc, tA, tB);
+                }
+
+                {
+                    tileA tA;
+                    tileB tB;
+                    auto gA = gIterA(i, Kb - 1);
+                    auto gB = gIterB(Kb - 1, j);
+                    TLOAD(tA, gA);
+                    TLOAD(tB, gB);
+                    TMATMUL_ACC_FIXP(tC, tCAcc, tA, tB);
                 }
             }
 
-            tileC tC;
-            TCVT(tC, tCAcc);
             auto gC = gIterC(i, j);
             TSTORE(gC, tC);
         }
@@ -184,11 +208,20 @@ the spellings below use the canonical public operation names.
 
 | Intrinsic contract | Source spelling | Called from |
 | --- | --- | --- |
-| [`TCVT`](../../../../intrinsics/tcvt.md) | `TCVT` | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul.cpp` |
 | [`TLOAD`](../../../../intrinsics/tload.md) | `TLOAD` | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul.cpp` |
 | [`TMATMUL`](../../../../intrinsics/tmatmul.md) | `TMATMUL` | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul.cpp` |
 | [`TMATMUL_ACC`](../../../../intrinsics/tmatmul_acc.md) | `TMATMUL_ACC` | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul.cpp` |
 | [`TSTORE`](../../../../intrinsics/tstore.md) | `TSTORE` | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul.cpp` |
+
+### Repository Helper Surface
+
+These uppercase calls are repository wrappers or fused helpers, not distinct
+entries in the public intrinsic reference.
+
+| Helper | Defined or called from |
+| --- | --- |
+| `TMATMUL_ACC_FIXP` | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul.cpp` |
+| `TMATMUL_FIXP` | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul.cpp` |
 
 ## Active Build Commands
 
