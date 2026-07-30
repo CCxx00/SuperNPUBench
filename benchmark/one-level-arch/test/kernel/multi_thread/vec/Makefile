@@ -1,4 +1,4 @@
-# Multi-thread vector-add operator.
+# Multi-thread vector operators.
 
 TESTCASE ?= vec
 
@@ -20,7 +20,14 @@ endif
 DEFINES += -DTileRows=$(TileRows)
 DEFINES += -DTileCols=$(TileCols)
 
+ifeq ($(TESTCASE),trowsum)
+SRC_FILE += $(TEST_ROOT)/$(CASE_SRC_DIR)/trowsum.cpp
+TARGET = $(ELF_HEAD)_trowsum_Rows$(TileRows)_Cols$(TileCols).elf
+else ifneq ($(filter $(TESTCASE),vec tadd),)
 SRC_FILE += $(TEST_ROOT)/$(CASE_SRC_DIR)/tadd.cpp
 TARGET = $(ELF_HEAD)_Rows$(TileRows)_Cols$(TileCols).elf
+else
+$(error Unsupported TESTCASE=$(TESTCASE); expected vec, tadd, or trowsum)
+endif
 
 include ../../../common/Makefile.common

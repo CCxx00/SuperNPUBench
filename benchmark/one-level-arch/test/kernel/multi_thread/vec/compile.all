@@ -6,3 +6,7 @@
 make TESTCASE=vec \
     COMPILER_DIR="$COMPILER_DIR" \
     TileRows=16 TileCols=16
+
+make TESTCASE=trowsum \
+    COMPILER_DIR="$COMPILER_DIR" \
+    TileRows=16 TileCols=16

@@ -56,7 +56,7 @@ using SharedTile = TileRight<dtype, Rows, Cols, ValidRows, ValidCols>;
 //
 // Compute contract:
 //   - Each PE independently executes vector tileOPs for its [kTm, *] slice.
-//   - Every physical tile is constrained to fewer than 8K elements.
+//   - Every physical PE-local/shared tile is constrained to at most 8 KiB.
 //   - tmatmul is a compiler intrinsic used as a scalar instruction in each PE's
 //     program. Each PE passes only its own lhs/acc tile, while K/V are shared
 //     staging tiles. The collective execution fuses the PE-local slices into
@@ -80,20 +80,21 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
     //   current PE M slice: kTm
     //   collective big M  : 4 * kTm
     constexpr int kPaddedQ = (qD == 192 ? 256 : qD);
-    // All PE-local and shared physical tiles must stay below 8K elements.
-    constexpr int kTileElemLimit = 8 * 1024;
+    // FP32 with head dim 128 needs 16-row box alignment, so the minimum
+    // legal Q/K/V/O tile is 16 * 128 * 4 = 8 KiB.
+    constexpr int kTileByteLimit = 8 * 1024;
 
     // tile validity check
-    static_assert(kTm * kPaddedQ < kTileElemLimit,
-                  "each PE Q tile must be smaller than 8K elements");
-    static_assert(kTm * kTk < kTileElemLimit,
-                  "each PE score tile must be smaller than 8K elements");
-    static_assert(kTm * vD < kTileElemLimit,
-                  "each PE output tile must be smaller than 8K elements");
-    static_assert(kTk * kPaddedQ < kTileElemLimit,
-                  "shared K tile must be smaller than 8K elements");
-    static_assert(kTk * vD < kTileElemLimit,
-                  "shared V tile must be smaller than 8K elements");
+    static_assert(kTm * kPaddedQ * sizeof(dtype) <= kTileByteLimit,
+                  "each PE Q tile must not exceed 8 KiB");
+    static_assert(kTm * kTk * sizeof(float) <= kTileByteLimit,
+                  "each PE score tile must not exceed 8 KiB");
+    static_assert(kTm * vD * sizeof(float) <= kTileByteLimit,
+                  "each PE output tile must not exceed 8 KiB");
+    static_assert(kTk * kPaddedQ * sizeof(dtype) <= kTileByteLimit,
+                  "shared K tile must not exceed 8 KiB");
+    static_assert(kTk * vD * sizeof(dtype) <= kTileByteLimit,
+                  "shared V tile must not exceed 8 KiB");
 
     // Global tensor layout. All four tensors are RowMajor so TLOAD/TSTORE can
     // remain pure ND-to-ND copies:
@@ -102,17 +103,19 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
     //   gmV: [Skv, vD], row stride vD
     //   gmO: [Sq,  vD], row stride vD
     using gmQ = global_tensor<dtype, RowMajor<Sq, qD>>;
-    using gmK = global_tensor<dtype, RowMajor<Skv, qD>>;
+    // Reinterpret row-major K[Skv,qD] as the transposed col-major view
+    // K^T[qD,Skv], so the right TMATMUL operand has shape [qD,kTk].
+    using gmK = global_tensor<dtype, ColMajor<qD, Skv>>;
     using gmV = global_tensor<dtype, RowMajor<Skv, vD>>;
     using gmO = global_tensor<dtype, RowMajor<Sq, vD>>;
 
     // Q is PE-local; K/V are full shared tiles loaded by TLOAD:
     //   tileQ: Q_pe, physical [kTm, kPaddedQ], valid [kTm, qD], NZ-layout
-    //   tileK: K_shared, physical [kTk, kPaddedQ], valid [kTk, qD], Zn-layout
+    //   tileK: K^T_shared, physical [kPaddedQ, kTk], valid [qD, kTk], Zn-layout
     //   tileV: V_shared, physical/logical [kTk, vD], Zn-layout
     // The tmatmul intrinsic must read the shared K tile as Zn.
     using tileQ = TileLeft<dtype, kTm, kPaddedQ, kTm, qD>;
-    using tileK = SharedTile<dtype, kTk, kPaddedQ, kTk, qD>;
+    using tileK = SharedTile<dtype, kPaddedQ, kTk, qD, kTk>;
     using tileV = SharedTile<dtype, kTk, vD>;
 
     // QK score tiles:
@@ -122,12 +125,11 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
     //   logical collective input:
     //     Q_big       -> concat Q_pe from PE0..PE3, shape [4*kTm, qD]
     //   tmatmul output in each PE:
-    //     tWAcc       -> current PE's W_pe [kTm, kTk], Nz-layout
+    //     tW          -> current PE's W_pe [kTm, kTk], ordinary Vec tile
     //   logical collective output:
     //     W_big       -> concat W_pe from PE0..PE3, shape [4*kTm, kTk].
     //
     // tileW/tileWCast are PE-local vector tiles used by online softmax.
-    using tileWAcc = TileAcc<float, kTm, kTk>;
     using tileW = Tile<Location::Vec, float, kTm, kTk, BLayout::ColMajor>;
     using tileWCast = Tile<Location::Vec, dtype,
                            kTm, kTk, BLayout::ColMajor>;
@@ -137,10 +139,9 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
 
     // PV/output tiles:
     //   TMATMUL(P_big, V_big) -> PV_big [4*kTm, vD]
-    //   current PE receives PV_pe/tileOAcc [kTm, vD].
+    //   current PE receives PV_pe/tileO [kTm, vD].
     //   tileO accumulates the online-softmax numerator for this PE row slice.
     //   tileOCast is the dtype tile stored to gmO.
-    using tileOAcc = TileAcc<float, kTm, vD>;
     using tileO = Tile<Location::Vec, float, kTm, vD, BLayout::ColMajor>;
     using tileOCast = Tile<Location::Vec, dtype, kTm, vD, BLayout::ColMajor>;
 
@@ -169,8 +170,8 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
     const float scale = 1.0f / sqrt((float)scaleD);
     // Qb is counted in logical big Q tiles [kTm, qD].
     // Kb is counted in logical big K/V tiles [kTk, qD/vD].
-    const int Qb = (Sq + kTm - 1) / kTm;
-    const int Kb = (Skv + kTk - 1) / kTk;
+    constexpr int Qb = (Sq + kTm - 1) / kTm;
+    constexpr int Kb = (Skv + kTk - 1) / kTk;
 
     for (int i = 0; i < Qb; ++i) {
         tileQ tQ;
@@ -204,25 +205,27 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
         TEXPANDS(tMax, -1e30f);
         TEXPANDS(tSum, 0.0f);
 
+        // tMax/tSum/tO are ordinary Tile values carried between K blocks.
+        // The current backend cannot keep ordinary Tile PHIs across a retained
+        // loop, so fully expand this compile-time-bounded online-softmax loop.
+#pragma clang loop unroll(full)
         for (int j = 0; j < Kb; ++j) {
             tileK tK;
 
-            // K is row-major [Skv, qD] and is loaded once as a full shared
-            // [kTk, qD] tile. TLOAD is still a pure row-major ND copy; TMATMUL
-            // consumes this tile as K^T [qD, kTk] internally.
+            // K storage is row-major [Skv,qD], exposed through the equivalent
+            // col-major K^T [qD,Skv] view and loaded as [qD,kTk].
             //
             // For K block j:
             //   before TLOAD:
-            //     K[j*kTk : (j+1)*kTk, 0:qD]
+            //     K^T[0:qD, j*kTk : (j+1)*kTk]
             //   after TLOAD:
-            //     tK = K_shared, valid shape [kTk, qD].
+            //     tK = K^T_shared, valid shape [qD, kTk].
             // ND->Zn
-            auto gK = gIterK(j, 0);
+            auto gK = gIterK(0, j);
             // map to TMATMUL.LD, load tile to staging B
             // 加载到shared tile reg, 只有tid=0会执行加载指令，tid=1，2，3不执行
             TLOAD(tK, gK);
 
-            tileWAcc tWAcc;
             tileW tW;
 
             // QK group GEMM:
@@ -232,17 +235,15 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
             //   Logical output:
             //     W_big = Q_big * K_big^T, shape [kTm, kTk]
             //   Physical output:
-            //     tWAcc is the current PE's W_pe [kTm, kTk].
+            //     tW is the current PE's ordinary W_pe [kTm, kTk].
             //
-            // Then the current PE converts/scales its own W_pe:
-            //   tW = tWAcc / sqrt(scaleD), shape [kTm, kTk].
-            // Each PE program only passes its private tQ/tWAcc. The collective
-            // tmatmul observes all PE-local lhs/acc tiles plus shared tK as one
+            // Then the current PE scales its own W_pe:
+            //   tW = FIXP(Q*K^T) / sqrt(scaleD), shape [kTm, kTk].
+            // Each PE program only passes its private tQ/tW. The collective
+            // tmatmul observes all PE-local lhs/output tiles plus shared tK as one
             // logical big-tile GEMM.
             // 对应指令gmma，4-PE发送4条gmma指令，
-            TMATMUL(tQ, tK, tWAcc);
-            // Nz->Dn
-            TCVT(tW, tWAcc);
+            TMATMUL_FIXP(tW, tQ, tK);
             TMULS(tW, tW, scale);
 
             tileMax tNewMax;
@@ -297,7 +298,6 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
             // logically form P_big [kTm,kTk]. No PE-local P tile is represented
             // as an array here.
             tilePLeft tPLeft;
-            tileOAcc tPVAcc;
 
             // PV collective GEMM:
             //   Inputs:
@@ -306,12 +306,11 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
             //   Logical output:
             //     PV_big = P_big * V_big, shape [kTm, vD]
             //   Physical output:
-            //     tPVAcc is the current PE's PV_pe [kTm, vD].
+            //     tPV is the current PE's ordinary PV_pe [kTm, vD].
             TCVT(tPLeft, tExpW);
-            TMATMUL(tPLeft, tV, tPVAcc);
+            TMATMUL_FIXP(tPV, tPLeft, tV);
 
-            // Convert current PV contribution to a Vec tile:
-            //   tPVAcc Acc [kTm,vD] -> tPV Vec [kTm,vD]
+            // Consume the current PV contribution as an ordinary Vec tile.
             //
             // Online output numerator update:
             //   first K/V block:
@@ -320,8 +319,6 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
             //     tO = tO * exp(m_old - m_new) + tPV
             //
             // TROWEXPANDMUL broadcasts tScale [kTm,1] across vD.
-            TCVT(tPV, tPVAcc);
-
             if (j == 0) {
                 tO = tPV;
             } else {
@@ -372,13 +369,13 @@ void flash_attention_2d_unroll_tmatmul_pto(dtype *out_ptr, dtype *q_ptr,
 #define vD 128
 
 #ifndef Tm
-#define kTm 32
+#define kTm 16
 #else
 #define kTm Tm
 #endif
 
 #ifndef Tk
-#define kTk 32
+#define kTk 16
 #else
 #define kTk Tk
 #endif

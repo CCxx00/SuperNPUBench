@@ -7,3 +7,8 @@ make TESTCASE=matmul \
     COMPILER_DIR="$COMPILER_DIR" \
     B=1 M=256 N=256 K=256 \
     tM=32 tN=32 tK=32
+
+make TESTCASE=matmul_partial \
+    COMPILER_DIR="$COMPILER_DIR" \
+    B=1 M=256 N=256 K=256 \
+    tM=16 tN=32 tK=32

@@ -109,31 +109,55 @@ void matmul_multithread(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
     for (int i = 0; i < Mb; ++i) {
         for (int j = 0; j < Nb; ++j) {
             tileCAcc tCAcc;
+            tileC tC;
 
-            for (int k = 0; k < Kb; ++k) {
+            if constexpr (Kb == 1) {
                 tileA tA;
                 tileB tB;
 
-                // Every PE loads from its selected A matrix. The kernel only
-                // sees the PE-local tile shape [tM, tK].
-                auto gA = gIterA(i, k);
+                auto gA = gIterA(i, 0);
                 TLOAD(tA, gA);
-
-                // B is common to all PEs. The group load is represented once
-                // per SPMD program and maps to shared GMMA rhs staging.
-                auto gB = gIterB(k, j);
+                auto gB = gIterB(0, j);
                 TLOAD(tB, gB);
-
-                if (k == 0) {
+                TMATMUL_FIXP(tC, tA, tB);
+            } else {
+                // Initialize the implicit ACC with the first K block.
+                {
+                    tileA tA;
+                    tileB tB;
+                    auto gA = gIterA(i, 0);
+                    auto gB = gIterB(0, j);
+                    TLOAD(tA, gA);
+                    TLOAD(tB, gB);
                     TMATMUL(tCAcc, tA, tB);
-                } else {
+                }
+
+                // Accumulate all interior K blocks while keeping ACC live.
+                for (int k = 1; k < Kb - 1; ++k) {
+                    tileA tA;
+                    tileB tB;
+                    auto gA = gIterA(i, k);
+                    auto gB = gIterB(k, j);
+                    TLOAD(tA, gA);
+                    TLOAD(tB, gB);
                     TMATMUL_ACC(tCAcc, tA, tB);
+                }
+
+                // Consume ACC in straight-line control flow and produce an
+                // ordinary tile that can be stored directly.
+                {
+                    tileA tA;
+                    tileB tB;
+                    auto gA = gIterA(i, Kb - 1);
+                    auto gB = gIterB(Kb - 1, j);
+                    TLOAD(tA, gA);
+                    TLOAD(tB, gB);
+                    TMATMUL_ACC_FIXP(tC, tCAcc, tA, tB);
                 }
             }
 
-            // Convert and store only the current PE's C row slice.
-            tileC tC;
-            TCVT(tC, tCAcc);
+            // The final K chunk consumes the implicit ACC and writes the
+            // current PE's ordinary C tile directly.
             auto gC = gIterC(i, j);
             TSTORE(gC, tC);
         }
