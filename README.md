@@ -21,9 +21,10 @@ SuperNPUBench/
 │   │   ├── test/
 │   │   └── compile_all.sh
 ├── microbenchmark/          # instruction-level micro-bench (cube/vector/memory/scalar)
-├── docs/                    # documentation
-│   ├── programming/        # PTO C++ Programming Guide
-│   └── workflow/           # end-to-end workflow docs + opencode skill
+├── docs/                    # standalone website source and build tooling
+│   ├── content/            # published manual pages and assets
+│   ├── scripts/            # catalog generators and verification
+│   └── mkdocs.yml          # site configuration
 └── compile_all.sh           # top-level: two-level | one-level | all
 ```
 
@@ -38,7 +39,7 @@ SuperNPUBench/
 ### one-level-arch (PTO ISA)
 - Tile-centric ISA with explicit memory hierarchy: Vec (UB), Mat (L1), Left (L0A), Right (L0B), Acc (L0C).
 - Programming model: tile operations, Auto/Manual modes.
-- Programming guide: [`docs/programming/pto c++ programming guide.md`](docs/programming/pto%20c++%20programming%20guide.md).
+- Programming guide: [`docs/content/programming/cpp-programming-guide.md`](docs/content/programming/cpp-programming-guide.md).
 
 Both backends share the same operator set and test layout; their kernel
 implementations differ in ISA style.
@@ -269,8 +270,9 @@ make clean_all                # clean all
 
 ## Documentation
 
-- **PTO C++ Programming Guide**: [`docs/programming/pto c++ programming guide.md`](docs/programming/pto%20c++%20programming%20guide.md)
-- **End-to-end Workflow**: [`docs/workflow/operator_to_chip_execution_flow.md`](docs/workflow/operator_to_chip_execution_flow.md)
+- **C++ tile kernel guide**: [`docs/content/programming/cpp-programming-guide.md`](docs/content/programming/cpp-programming-guide.md)
+- **End-to-end Workflow**: [`docs/content/workflow/operator_to_chip_execution_flow.md`](docs/content/workflow/operator_to_chip_execution_flow.md)
+- **Website source and local build**: [`docs/DEVELOPING.md`](docs/DEVELOPING.md)
 - **Per-operator README**: see `benchmark/one-level-arch/kernels/<operator>/README.md`
 - **Microbenchmark**: [`microbenchmark/README.md`](microbenchmark/README.md)
 
