@@ -59,5 +59,5 @@ void reduce_rows() {
 
 ## Used by kernels
 
-- [`reducemax-row-6e95758c`](../benchmarks/catalog/one-level/reduction-reducemax-row/reducemax-row-6e95758c.md) - `benchmark/one-level-arch/kernels/reduction/reducemax_rowvec_pto.hpp`
-- [`fa-2d-unroll-b46797ec`](../benchmarks/catalog/one-level/fa/fa-2d-unroll-b46797ec.md) - `benchmark/one-level-arch/kernels/fa/fa_2d_unroll_pto.hpp`
+- [`reducemax-row`](../benchmarks/catalog/one-level/reduction-reducemax-row/reducemax-row.md) - `benchmark/one-level-arch/kernels/reduction/reducemax_rowvec_pto.hpp`
+- [`fa-2d-unroll`](../benchmarks/catalog/one-level/fa/fa-2d-unroll.md) - `benchmark/one-level-arch/kernels/fa/fa_2d_unroll_pto.hpp`

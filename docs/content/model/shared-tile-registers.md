@@ -128,10 +128,12 @@ that iteration:
 ```cpp
 for (int k = 0; k < kKTiles; ++k) {
   if (thread == 0) {
-    TLOAD(shared_b, rhs_tiles(k, output_column));
+    auto right_view = rhs_tiles(k, output_column);
+    TLOAD(shared_b, right_view);
   }
 
-  TLOAD(local_a, lhs_tiles(local_row, k));
+  auto left_view = lhs_tiles(local_row, k);
+  TLOAD(local_a, left_view);
   if (k == 0) {
     TMATMUL(local_accum, local_a, shared_b);
   } else {

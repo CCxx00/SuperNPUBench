@@ -232,86 +232,88 @@ nav:
       - Catalog: benchmarks/index.md
       - Broadcast:
           - Overview: benchmarks/catalog/one-level/broadcast/index.md
-          - Broadcast: benchmarks/catalog/one-level/broadcast/broadcast-9f406253.md
-          - Broadcast vec 019: benchmarks/catalog/one-level/broadcast/broadcast-vec-019-8713b1a8.md
-          - Broadcast vec 039: benchmarks/catalog/one-level/broadcast/broadcast-vec-039-ac6775c3.md
-          - Broadcast vec 07: benchmarks/catalog/one-level/broadcast/broadcast-vec-07-ba7002f4.md
+          - Broadcast vec 019: benchmarks/catalog/one-level/broadcast/broadcast-vec-019.md
+          - Broadcast vec 039: benchmarks/catalog/one-level/broadcast/broadcast-vec-039.md
+          - Broadcast vec 07: benchmarks/catalog/one-level/broadcast/broadcast-vec-07.md
+          - Broadcast: benchmarks/catalog/one-level/broadcast/broadcast.md
       - Concat:
           - Overview: benchmarks/catalog/one-level/concat/index.md
-          - Concat gather: benchmarks/catalog/one-level/concat/concat-gather-1c6990b2.md
-          - Concat scatter: benchmarks/catalog/one-level/concat/concat-scatter-29559c6c.md
+          - Concat gather: benchmarks/catalog/one-level/concat/concat-gather.md
+          - Concat scatter: benchmarks/catalog/one-level/concat/concat-scatter.md
       - Control:
           - Overview: benchmarks/catalog/one-level/control/index.md
-          - Tile-parallel hash-table lookup: benchmarks/catalog/one-level/control/hashtable-lookup-simd-5bc02e85.md
+          - Tile-parallel hash-table lookup: benchmarks/catalog/one-level/control/hashtable-lookup-simd.md
       - Deepseek:
           - Overview: benchmarks/catalog/one-level/deepseek/index.md
-          - Aux fi: benchmarks/catalog/one-level/deepseek/aux-fi-7f0addb4.md
-          - Batched transpose: benchmarks/catalog/one-level/deepseek/batched-transpose-fd77e97f.md
-          - Cast back per channel: benchmarks/catalog/one-level/deepseek/cast-back-per-channel-17a524f6.md
-          - Cast back per token: benchmarks/catalog/one-level/deepseek/cast-back-per-token-761d2d62.md
-          - Engram hash layer: benchmarks/catalog/one-level/deepseek/engram-hash-layer-1edf7c2e.md
-          - Expand to fused: benchmarks/catalog/one-level/deepseek/expand-to-fused-6154ec17.md
-          - Expand to mhc bwd: benchmarks/catalog/one-level/deepseek/expand-to-mhc-bwd-3cb29681.md
-          - Expand to mhc fwd: benchmarks/catalog/one-level/deepseek/expand-to-mhc-fwd-249567f2.md
-          - Fn normw merge fwd: benchmarks/catalog/one-level/deepseek/fn-normw-merge-fwd-aa0db44e.md
-          - Fused weight: benchmarks/catalog/one-level/deepseek/fused-weight-4e0792f2.md
-          - Get fused mapping: benchmarks/catalog/one-level/deepseek/get-fused-mapping-f7e3e580.md
-          - Group count: benchmarks/catalog/one-level/deepseek/group-count-3a84f05f.md
-          - Inplace unique group indices: benchmarks/catalog/one-level/deepseek/inplace-unique-group-indices-3a29771f.md
-          - Mask indices by tp: benchmarks/catalog/one-level/deepseek/mask-indices-by-tp-5ccfb1b4.md
-          - Multilayer recompute: benchmarks/catalog/one-level/deepseek/multilayer-recompute-d63837bd.md
-          - Normalize weight: benchmarks/catalog/one-level/deepseek/normalize-weight-1f187291.md
-          - Per channel cast: benchmarks/catalog/one-level/deepseek/per-channel-cast-4099d87a.md
-          - Per token cast: benchmarks/catalog/one-level/deepseek/per-token-cast-cfd95521.md
-          - Reduce fused: benchmarks/catalog/one-level/deepseek/reduce-fused-71e79cde.md
-          - Rms norm: benchmarks/catalog/one-level/deepseek/rms-norm-1d6540fd.md
-          - Sinkhorn fwd: benchmarks/catalog/one-level/deepseek/sinkhorn-fwd-2d08f1fa.md
-          - Swiglu forward and per token cast: benchmarks/catalog/one-level/deepseek/swiglu-forward-and-per-token-cast-bf13935f.md
-          - Topk gate: benchmarks/catalog/one-level/deepseek/topk-gate-b47cf7c4.md
+          - Aux fi: benchmarks/catalog/one-level/deepseek/aux-fi.md
+          - Batched transpose: benchmarks/catalog/one-level/deepseek/batched-transpose.md
+          - Cast back per channel: benchmarks/catalog/one-level/deepseek/cast-back-per-channel.md
+          - Cast back per token: benchmarks/catalog/one-level/deepseek/cast-back-per-token.md
+          - Engram hash layer: benchmarks/catalog/one-level/deepseek/engram-hash-layer.md
+          - Expand to fused: benchmarks/catalog/one-level/deepseek/expand-to-fused.md
+          - Expand to mhc bwd: benchmarks/catalog/one-level/deepseek/expand-to-mhc-bwd.md
+          - Expand to mhc fwd: benchmarks/catalog/one-level/deepseek/expand-to-mhc-fwd.md
+          - Fn normw merge fwd: benchmarks/catalog/one-level/deepseek/fn-normw-merge-fwd.md
+          - Fused weight: benchmarks/catalog/one-level/deepseek/fused-weight.md
+          - Get fused mapping: benchmarks/catalog/one-level/deepseek/get-fused-mapping.md
+          - Group count: benchmarks/catalog/one-level/deepseek/group-count.md
+          - Inplace unique group indices: benchmarks/catalog/one-level/deepseek/inplace-unique-group-indices.md
+          - Mask indices by tp: benchmarks/catalog/one-level/deepseek/mask-indices-by-tp.md
+          - Multilayer recompute: benchmarks/catalog/one-level/deepseek/multilayer-recompute.md
+          - Normalize weight: benchmarks/catalog/one-level/deepseek/normalize-weight.md
+          - Per channel cast: benchmarks/catalog/one-level/deepseek/per-channel-cast.md
+          - Per token cast: benchmarks/catalog/one-level/deepseek/per-token-cast.md
+          - Reduce fused: benchmarks/catalog/one-level/deepseek/reduce-fused.md
+          - Rms norm: benchmarks/catalog/one-level/deepseek/rms-norm.md
+          - Sinkhorn fwd: benchmarks/catalog/one-level/deepseek/sinkhorn-fwd.md
+          - Swiglu forward and per token cast: benchmarks/catalog/one-level/deepseek/swiglu-forward-and-per-token-cast.md
+          - Topk gate: benchmarks/catalog/one-level/deepseek/topk-gate.md
       - Element Wise / Gelu:
           - Overview: benchmarks/catalog/one-level/element-wise-gelu/index.md
-          - GELU from tile arithmetic: benchmarks/catalog/one-level/element-wise-gelu/gelu-fdf67353.md
+          - GELU from tile arithmetic: benchmarks/catalog/one-level/element-wise-gelu/gelu.md
       - Fa:
           - Overview: benchmarks/catalog/one-level/fa/index.md
-          - Online softmax for tiled FlashAttention: benchmarks/catalog/one-level/fa/fa-2d-unroll-b46797ec.md
-          - Fa HIF4 HIF4: benchmarks/catalog/one-level/fa/fa-hif4-86b1f297.md
-          - Fa softmax pto: benchmarks/catalog/one-level/fa/fa-softmax-pto-c347f74a.md
-          - Sfa: benchmarks/catalog/one-level/fa/sfa-c6ee8526.md
+          - Online softmax for tiled FlashAttention: benchmarks/catalog/one-level/fa/fa-2d-unroll.md
+          - Fa HIF4 HIF4: benchmarks/catalog/one-level/fa/fa-hif4.md
+          - Fa softmax pto: benchmarks/catalog/one-level/fa/fa-softmax-pto.md
+          - Sfa: benchmarks/catalog/one-level/fa/sfa.md
       - Gather:
           - Overview: benchmarks/catalog/one-level/gather/index.md
-          - Gather: benchmarks/catalog/one-level/gather/gather-4948597c.md
+          - Gather: benchmarks/catalog/one-level/gather/gather.md
       - Matmul:
           - Overview: benchmarks/catalog/one-level/matmul/index.md
-          - Tiled matrix multiplication: benchmarks/catalog/one-level/matmul/a16w4-f1f175ff.md
-          - Tiled matrix multiplication: benchmarks/catalog/one-level/matmul/hif4-hif4-f0fd84bb.md
-          - Tiled matrix multiplication: benchmarks/catalog/one-level/matmul/matmul-a008ac76.md
+          - Tiled matrix multiplication: benchmarks/catalog/one-level/matmul/a16w4.md
+          - Tiled matrix multiplication: benchmarks/catalog/one-level/matmul/hif4-hif4.md
+          - Tiled matrix multiplication: benchmarks/catalog/one-level/matmul/matmul.md
       - Multi Thread / Fa:
           - Overview: benchmarks/catalog/one-level/multi-thread-fa/index.md
-          - Fa 2d unroll gmma: benchmarks/catalog/one-level/multi-thread-fa/fa-2d-unroll-gmma-0f8fe51a.md
+          - Fa 2d unroll gmma: benchmarks/catalog/one-level/multi-thread-fa/fa-2d-unroll-gmma.md
       - Multi Thread / Matmul:
           - Overview: benchmarks/catalog/one-level/multi-thread-matmul/index.md
-          - Tiled matrix multiplication: benchmarks/catalog/one-level/multi-thread-matmul/matmul-fe4e636b.md
+          - Partial grouped matrix multiplication: benchmarks/catalog/one-level/multi-thread-matmul/matmul-partial.md
+          - Tiled matrix multiplication: benchmarks/catalog/one-level/multi-thread-matmul/matmul.md
       - Multi Thread / Vec:
           - Overview: benchmarks/catalog/one-level/multi-thread-vec/index.md
-          - Vec: benchmarks/catalog/one-level/multi-thread-vec/tadd-3ea26abc.md
+          - Thread-partitioned tile addition: benchmarks/catalog/one-level/multi-thread-vec/tadd.md
+          - Thread-partitioned row reduction: benchmarks/catalog/one-level/multi-thread-vec/trowsum.md
       - Reduction / Reducemax Col:
           - Overview: benchmarks/catalog/one-level/reduction-reducemax-col/index.md
-          - Reducemax col: benchmarks/catalog/one-level/reduction-reducemax-col/reducemax-col-1c7de9cb.md
+          - Reducemax col: benchmarks/catalog/one-level/reduction-reducemax-col/reducemax-col.md
       - Reduction / Reducemax Row:
           - Overview: benchmarks/catalog/one-level/reduction-reducemax-row/index.md
-          - Reducemax row: benchmarks/catalog/one-level/reduction-reducemax-row/reducemax-row-6e95758c.md
+          - Reducemax row: benchmarks/catalog/one-level/reduction-reducemax-row/reducemax-row.md
       - Reduction / Reducesum Col:
           - Overview: benchmarks/catalog/one-level/reduction-reducesum-col/index.md
-          - Reducesum col: benchmarks/catalog/one-level/reduction-reducesum-col/reducesum-col-d8b6df3d.md
+          - Reducesum col: benchmarks/catalog/one-level/reduction-reducesum-col/reducesum-col.md
       - Reduction / Reducesum Row:
           - Overview: benchmarks/catalog/one-level/reduction-reducesum-row/index.md
-          - Reducesum row: benchmarks/catalog/one-level/reduction-reducesum-row/reducesum-row-f79bc562.md
+          - Reducesum row: benchmarks/catalog/one-level/reduction-reducesum-row/reducesum-row.md
       - Sort:
           - Overview: benchmarks/catalog/one-level/sort/index.md
-          - Block-wise top-k selection: benchmarks/catalog/one-level/sort/topk-0a98c8a8.md
+          - Block-wise top-k selection: benchmarks/catalog/one-level/sort/topk.md
       - Transpose:
           - Overview: benchmarks/catalog/one-level/transpose/index.md
-          - Tiled tensor transpose: benchmarks/catalog/one-level/transpose/transpose-dece711d.md
+          - Tiled tensor transpose: benchmarks/catalog/one-level/transpose/transpose.md
       # BENCHMARK-CATALOG-NAV:END
       - DeepSeek kernels:
           # DEEPSEEK-NAV:START

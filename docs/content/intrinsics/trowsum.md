@@ -59,5 +59,5 @@ void reduce_rows() {
 
 ## Used by kernels
 
-- [`reducesum-row-f79bc562`](../benchmarks/catalog/one-level/reduction-reducesum-row/reducesum-row-f79bc562.md) - `benchmark/one-level-arch/kernels/reduction/reducesum_rowvec_pto.hpp`
-- [`fa-2d-unroll-b46797ec`](../benchmarks/catalog/one-level/fa/fa-2d-unroll-b46797ec.md) - `benchmark/one-level-arch/kernels/fa/fa_2d_unroll_pto.hpp`
+- [`reducesum-row`](../benchmarks/catalog/one-level/reduction-reducesum-row/reducesum-row.md) - `benchmark/one-level-arch/kernels/reduction/reducesum_rowvec_pto.hpp`
+- [`fa-2d-unroll`](../benchmarks/catalog/one-level/fa/fa-2d-unroll.md) - `benchmark/one-level-arch/kernels/fa/fa_2d_unroll_pto.hpp`

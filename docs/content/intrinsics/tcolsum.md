@@ -62,5 +62,5 @@ void reduce_columns() {
 
 ## Used by kernels
 
-- [`reducesum-col-d8b6df3d`](../benchmarks/catalog/one-level/reduction-reducesum-col/reducesum-col-d8b6df3d.md) - `benchmark/one-level-arch/kernels/reduction/reducesum_colvec_pto.hpp`
-- [`fa-hif4-86b1f297`](../benchmarks/catalog/one-level/fa/fa-hif4-86b1f297.md) - `benchmark/one-level-arch/kernels/fa/fa_hif4.hpp`
+- [`reducesum-col`](../benchmarks/catalog/one-level/reduction-reducesum-col/reducesum-col.md) - `benchmark/one-level-arch/kernels/reduction/reducesum_colvec_pto.hpp`
+- [`fa-hif4`](../benchmarks/catalog/one-level/fa/fa-hif4.md) - `benchmark/one-level-arch/kernels/fa/fa_hif4.hpp`

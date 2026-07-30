@@ -7,4 +7,4 @@ This family contains **1** source implementations and
 
 | Implementation | Source | Variants | Intrinsic surface |
 | --- | --- | ---: | --- |
-| [reducemax_row](reducemax-row-6e95758c.md) | `benchmark/one-level-arch/test/kernel/reduction/reducemax_row/src/reducemax_row.cpp` | 1 | [`TEXPANDS`](../../../../intrinsics/texpands.md), [`TLOAD`](../../../../intrinsics/tload.md), [`TMAX`](../../../../intrinsics/tmax.md), [`TROWMAX`](../../../../intrinsics/trowmax.md), [`TSTORE`](../../../../intrinsics/tstore.md) |
+| [reducemax_row](reducemax-row.md) | `benchmark/one-level-arch/test/kernel/reduction/reducemax_row/src/reducemax_row.cpp` | 1 | [`TEXPANDS`](../../../../intrinsics/texpands.md), [`TLOAD`](../../../../intrinsics/tload.md), [`TMAX`](../../../../intrinsics/tmax.md), [`TROWMAX`](../../../../intrinsics/trowmax.md), [`TSTORE`](../../../../intrinsics/tstore.md) |

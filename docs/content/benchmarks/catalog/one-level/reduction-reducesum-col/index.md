@@ -7,4 +7,4 @@ This family contains **1** source implementations and
 
 | Implementation | Source | Variants | Intrinsic surface |
 | --- | --- | ---: | --- |
-| [reducesum_col](reducesum-col-d8b6df3d.md) | `benchmark/one-level-arch/test/kernel/reduction/reducesum_col/src/reducesum_col.cpp` | 2 | [`TADD`](../../../../intrinsics/tadd.md), [`TCOLSUM`](../../../../intrinsics/tcolsum.md), [`TEXPANDS`](../../../../intrinsics/texpands.md), [`TLOAD`](../../../../intrinsics/tload.md), [`TSTORE`](../../../../intrinsics/tstore.md) |
+| [reducesum_col](reducesum-col.md) | `benchmark/one-level-arch/test/kernel/reduction/reducesum_col/src/reducesum_col.cpp` | 2 | [`TADD`](../../../../intrinsics/tadd.md), [`TCOLSUM`](../../../../intrinsics/tcolsum.md), [`TEXPANDS`](../../../../intrinsics/texpands.md), [`TLOAD`](../../../../intrinsics/tload.md), [`TSTORE`](../../../../intrinsics/tstore.md) |

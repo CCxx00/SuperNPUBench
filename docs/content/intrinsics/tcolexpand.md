@@ -56,5 +56,5 @@ void broadcast_columns() {
 
 ## Used by kernels
 
-- [`hif4-hif4-f0fd84bb`](../benchmarks/catalog/one-level/matmul/hif4-hif4-f0fd84bb.md) - `benchmark/one-level-arch/kernels/matmul/matmul_mx.hpp`
-- [`a16w4-f1f175ff`](../benchmarks/catalog/one-level/matmul/a16w4-f1f175ff.md) - `benchmark/one-level-arch/kernels/matmul/matmul_mx.hpp`
+- [`hif4-hif4`](../benchmarks/catalog/one-level/matmul/hif4-hif4.md) - `benchmark/one-level-arch/kernels/matmul/matmul_mx.hpp`
+- [`a16w4`](../benchmarks/catalog/one-level/matmul/a16w4.md) - `benchmark/one-level-arch/kernels/matmul/matmul_mx.hpp`

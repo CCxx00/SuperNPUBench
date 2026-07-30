@@ -60,4 +60,4 @@ void apply_row_scalars() {
 
 ## Used by kernels
 
-- [`fa-2d-unroll-b46797ec`](../benchmarks/catalog/one-level/fa/fa-2d-unroll-b46797ec.md) - `benchmark/one-level-arch/kernels/fa/fa_2d_unroll_pto.hpp`
+- [`fa-2d-unroll`](../benchmarks/catalog/one-level/fa/fa-2d-unroll.md) - `benchmark/one-level-arch/kernels/fa/fa_2d_unroll_pto.hpp`

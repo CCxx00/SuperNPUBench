@@ -40,9 +40,11 @@ for (int tr = 0; tr < kRows / kTileRows; ++tr) {
   for (int tc = 0; tc < kCols / kTileCols; ++tc) {
     Tile input;
     Tile output;
-    TLOAD(input, input_tiles(tr, tc));
+    auto input_view = input_tiles(tr, tc);
+    auto output_view = output_tiles(tr, tc);
+    TLOAD(input, input_view);
     TRELU(output, input);
-    TSTORE(output_tiles(tr, tc), output);
+    TSTORE(output_view, output);
   }
 }
 ```
@@ -66,9 +68,11 @@ for (int batch = 0; batch < kBatch; ++batch) {
     for (int tc = 0; tc < kCols / kTileCols; ++tc) {
       Tile x;
       Tile y;
-      TLOAD(x, input_tiles(tr, tc));
+      auto input_view = input_tiles(tr, tc);
+      auto output_view = output_tiles(tr, tc);
+      TLOAD(x, input_view);
       TADDS(y, x, bias[batch]);
-      TSTORE(output_tiles(tr, tc), y);
+      TSTORE(output_view, y);
     }
   }
 }
@@ -98,9 +102,11 @@ for (int batch = 0; batch < kBatch; ++batch) {
          ++query_tile) {
       QueryTile q_fragment;
       OutputTile result;
-      TLOAD(q_fragment, queries(query_tile, 0));
+      auto query_view = queries(query_tile, 0);
+      auto output_view = outputs(query_tile, 0);
+      TLOAD(q_fragment, query_view);
       attention_for_query_tile(result, q_fragment, key, value);
-      TSTORE(outputs(query_tile, 0), result);
+      TSTORE(output_view, result);
     }
   }
 }
@@ -123,8 +129,10 @@ for (int m = 0; m < kM / kTM; ++m) {
     for (int k = 0; k < kK / kTK; ++k) {
       MatrixLeftTile<half, kTM, kTK> left;
       MatrixRightTile<half, kTK, kTN> right;
-      TLOAD(left, lhs_tiles(m, k));
-      TLOAD(right, rhs_tiles(k, n));
+      auto left_view = lhs_tiles(m, k);
+      auto right_view = rhs_tiles(k, n);
+      TLOAD(left, left_view);
+      TLOAD(right, right_view);
 
       if (k == 0) {
         TMATMUL(accum, left, right);
@@ -134,8 +142,9 @@ for (int m = 0; m < kM / kTM; ++m) {
     }
 
     LocalTile<float, kTM, kTN> result;
+    auto output_view = output_tiles(m, n);
     TCVT(result, accum);
-    TSTORE(output_tiles(m, n), result);
+    TSTORE(output_view, result);
   }
 }
 ```
@@ -154,11 +163,13 @@ SharedTile<half, kTK, kTN> shared_right;
 
 for (int k = 0; k < kK / kTK; ++k) {
   if (thread == 0) {
-    TLOAD(shared_right, rhs_tiles(k, output_column));
+    auto right_view = rhs_tiles(k, output_column);
+    TLOAD(shared_right, right_view);
   }
 
   MatrixLeftTile<half, kRowsPerThread, kTK> local_left;
-  TLOAD(local_left, lhs_tiles(local_row, k));
+  auto left_view = lhs_tiles(local_row, k);
+  TLOAD(local_left, left_view);
 
   if (k == 0) {
     TMATMUL(local_accum, local_left, shared_right);

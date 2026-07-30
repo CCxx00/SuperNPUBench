@@ -31,11 +31,14 @@ extern "C" void tile_add(int *out, int *lhs, int *rhs) {
       ValueTile left;
       ValueTile right;
       ValueTile sum;
+      auto left_view = lhs_tiles(tile_row, tile_col);
+      auto right_view = rhs_tiles(tile_row, tile_col);
+      auto out_view = out_tiles(tile_row, tile_col);
 
-      TLOAD(left, lhs_tiles(tile_row, tile_col));
-      TLOAD(right, rhs_tiles(tile_row, tile_col));
+      TLOAD(left, left_view);
+      TLOAD(right, right_view);
       TADD(sum, left, right);
-      TSTORE(out_tiles(tile_row, tile_col), sum);
+      TSTORE(out_view, sum);
     }
   }
 }

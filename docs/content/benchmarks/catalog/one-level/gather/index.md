@@ -7,4 +7,4 @@ This family contains **1** source implementations and
 
 | Implementation | Source | Variants | Intrinsic surface |
 | --- | --- | ---: | --- |
-| [gather](gather-4948597c.md) | `benchmark/one-level-arch/test/kernel/gather/src/gather.cpp` | 1 | [`MGATHER`](../../../../intrinsics/mgather.md), [`TLOAD`](../../../../intrinsics/tload.md), [`TSTORE`](../../../../intrinsics/tstore.md) |
+| [gather](gather.md) | `benchmark/one-level-arch/test/kernel/gather/src/gather.cpp` | 1 | [`MGATHER`](../../../../intrinsics/mgather.md), [`TLOAD`](../../../../intrinsics/tload.md), [`TSTORE`](../../../../intrinsics/tstore.md) |

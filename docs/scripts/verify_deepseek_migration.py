@@ -121,6 +121,8 @@ def check_migration(root: Path, errors: list[str]) -> None:
         )
     for page in pages:
         text = page.read_text(encoding="utf-8")
+        if re.search(r"\b[0-9a-f]{40}\b", text):
+            errors.append(f"{page.relative_to(root)}: exposes a commit ID")
         for heading in (
             "Core C++ kernel",
             "Algorithm walkthrough",

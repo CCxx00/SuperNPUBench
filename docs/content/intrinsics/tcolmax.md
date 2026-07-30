@@ -56,5 +56,5 @@ void reduce_columns() {
 
 ## Used by kernels
 
-- [`reducemax-col-1c7de9cb`](../benchmarks/catalog/one-level/reduction-reducemax-col/reducemax-col-1c7de9cb.md) - `benchmark/one-level-arch/kernels/reduction/reducemax_colvec_pto.hpp`
-- [`fa-hif4-86b1f297`](../benchmarks/catalog/one-level/fa/fa-hif4-86b1f297.md) - `benchmark/one-level-arch/kernels/fa/fa_hif4.hpp`
+- [`reducemax-col`](../benchmarks/catalog/one-level/reduction-reducemax-col/reducemax-col.md) - `benchmark/one-level-arch/kernels/reduction/reducemax_colvec_pto.hpp`
+- [`fa-hif4`](../benchmarks/catalog/one-level/fa/fa-hif4.md) - `benchmark/one-level-arch/kernels/fa/fa_hif4.hpp`

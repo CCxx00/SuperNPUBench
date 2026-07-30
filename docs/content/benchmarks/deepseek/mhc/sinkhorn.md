@@ -6,8 +6,7 @@ This multi-head composition translation expresses mixing, normalization, and rec
 
 | Field | Value |
 | --- | --- |
-| Upstream module | [`tile_kernels/mhc/sinkhorn_kernel.py`](https://github.com/deepseek-ai/TileKernels/blob/36d9e45d38e204ebb87e6f6e833821eee0482fe5/tile_kernels/mhc/sinkhorn_kernel.py) |
-| Pinned revision | `36d9e45d38e204ebb87e6f6e833821eee0482fe5` |
+| Upstream module | [`tile_kernels/mhc/sinkhorn_kernel.py`](https://github.com/deepseek-ai/TileKernels/blob/main/tile_kernels/mhc/sinkhorn_kernel.py) |
 | C++ function | `sinkhorn_fwd` |
 | Verification | `source-validated` |
 | Minimum thread fragment | 128 bytes |

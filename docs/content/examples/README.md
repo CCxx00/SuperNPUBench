@@ -17,7 +17,7 @@ which keeps target-specific implementation namespaces behind one include.
 surface. It intentionally omits online softmax; the full benchmark sources
 provide the numerically complete algorithm.
 `fine_grained_tiles.cpp` covers exact 128-byte logical tiles: vector-style
-arithmetic, a two-dimensional clamp, independent dependency chains, a valid
+arithmetic, a two-dimensional affine transform, independent dependency chains, a valid
 region tail, and a row reduction.
 They are compile-only teaching kernels; linked, runnable programs live in the
 benchmark test harness.

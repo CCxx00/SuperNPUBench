@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import itertools
 import json
 import re
@@ -38,6 +37,9 @@ TITLE_OVERRIDES = {
     "pto_add": "Load-add-store tile pipeline",
     "pto_tload_store": "Tile load and store data path",
     "pto_tmatmul_acc": "Matrix multiplication with accumulation",
+    "vec": "Thread-partitioned tile addition",
+    "trowsum": "Thread-partitioned row reduction",
+    "matmul_partial": "Partial grouped matrix multiplication",
 }
 
 
@@ -196,6 +198,12 @@ def resolve_source(manifest: Path, testcase: str, command: str) -> Path:
             "fa_2d_unroll": "fa_2d_unroll.cpp",
             "fa_softmax_pto": "fa_softmax_pto.cpp",
             "fa_2d_unroll_gmma": "fa_2d_unroll_gmma.cpp",
+        }.get(testcase)
+    elif directory.name == "vec" and directory.parent.name == "multi_thread":
+        special = {
+            "vec": "tadd.cpp",
+            "tadd": "tadd.cpp",
+            "trowsum": "trowsum.cpp",
         }.get(testcase)
     if special:
         matches = [path for path in files if path.name == special]
@@ -466,8 +474,13 @@ def implementation_page(
     intrinsic_files: dict[str, set[Path]],
     helper_files: dict[str, set[Path]],
 ) -> str:
-    source_hash = hashlib.sha1(rel(source, root).encode()).hexdigest()[:8]
-    page_name = f"{slug(source.stem)}-{source_hash}.md"
+    page_name = f"{slug(source.stem)}.md"
+    target = output / page_name
+    if target.exists():
+        raise ValueError(
+            f"benchmark page collision for {rel(source, root)}: "
+            f"{target.relative_to(root)}"
+        )
     title = benchmark_title(builds[0].testcase)
     names = set(intrinsic_files)
     spellings = intrinsic_spellings(intrinsic_files)
@@ -591,10 +604,12 @@ def implementation_page(
 
     lines.extend(
         [
-            "## Active Build Commands",
+            "## Manifest Build Commands",
             "",
-            f"Run these from `{rel(builds[0].manifest.parent, root)}` after setting",
-            "`COMPILER_DIR` and `LINX_SYSROOT` as described in the build guide.",
+            "These commands are preserved from the active source manifest. They are",
+            "catalog evidence, not proof of compatibility with the current compiler.",
+            f"Inspect them from `{rel(builds[0].manifest.parent, root)}` and use the",
+            "promoted cases in the build guide for compiler and model validation.",
             "",
             "| Manifest line | Command |",
             "| ---: | --- |",
@@ -639,7 +654,7 @@ def implementation_page(
     )
     lines.extend(f"    - `{rel(path, root)}`" for path in published_closure)
     lines.append("")
-    (output / page_name).write_text("\n".join(lines), encoding="utf-8")
+    target.write_text("\n".join(lines), encoding="utf-8")
     return page_name
 
 
@@ -653,9 +668,11 @@ def write_readme_catalog(root: Path, builds: list[Build]) -> None:
         start,
         "## Benchmark catalog",
         "",
-        f"The active manifests contain **{len(builds)} build variants**. Every name below",
+        f"The active one-level manifests contain **{len(builds)} build variants**. Every name below",
         "has a source-backed page with its build command and tile intrinsic surface in",
         "the website's **Benchmark Reference** section.",
+        "Catalog presence records source inventory; it does not imply promotion on the",
+        "current compiler and model flow.",
         "",
     ]
     for (backend, family), rows in sorted(grouped.items()):
@@ -826,7 +843,7 @@ def main() -> None:
         "",
         MARKER,
         "",
-        "This catalog is generated from every active kernel `compile.all` command. Each",
+        "This catalog is generated from every active one-level kernel `compile.all` command. Each",
         "implementation page presents the central kernel first, the reached local",
         "include implementations, the canonical intrinsic surface, exact build",
         "commands, and required data objects.",
