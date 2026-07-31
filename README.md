@@ -234,7 +234,3 @@ Start with:
    change.
 4. Compile a bounded promoted case with the pinned compiler.
 5. Run `docs/build.sh` before publication.
-
-## License
-
-See [LICENSE](LICENSE).

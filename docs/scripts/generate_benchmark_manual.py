@@ -4,11 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import html
 import itertools
 import json
 import re
 import shlex
 import shutil
+import subprocess
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -67,6 +70,64 @@ def benchmark_title(testcase: str) -> str:
 
 def rel(path: Path, root: Path) -> str:
     return path.resolve().relative_to(root.resolve()).as_posix()
+
+
+def tracked_data_files(root: Path, directory: Path) -> list[Path]:
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "ls-files",
+            "-z",
+            "--",
+            rel(directory, root),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    return sorted(
+        root / relative
+        for relative in result.stdout.decode().split("\0")
+        if relative
+        and "data_obj" in Path(relative).parts
+        and Path(relative).name != ".gitignore"
+    )
+
+
+def write_legacy_redirect(
+    output: Path,
+    root: Path,
+    source: Path,
+    stable_page_name: str,
+    title: str,
+) -> Path:
+    source_hash = hashlib.sha1(rel(source, root).encode()).hexdigest()[:8]
+    alias = output / f"{slug(source.stem)}-{source_hash}" / "index.html"
+    alias.parent.mkdir(parents=True)
+    stable_slug = Path(stable_page_name).stem
+    destination = f"../{stable_slug}/"
+    escaped_title = html.escape(title)
+    alias.write_text(
+        "\n".join(
+            [
+                "<!doctype html>",
+                "<html lang=\"en\">",
+                "<head>",
+                "  <meta charset=\"utf-8\">",
+                f'  <meta http-equiv="refresh" content="0; url={destination}">',
+                f'  <link rel="canonical" href="{destination}">',
+                f"  <title>{escaped_title}</title>",
+                "</head>",
+                "<body>",
+                f'  <p>This benchmark page moved to <a href="{destination}">{escaped_title}</a>.</p>',
+                "</body>",
+                "</html>",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return alias
 
 
 def logical_lines(text: str) -> list[tuple[int, str]]:
@@ -620,11 +681,7 @@ def implementation_page(
         lines.append(f"| {build.line} | `{command}` |")
     lines.append("")
 
-    data_files = sorted(
-        path
-        for path in builds[0].manifest.parent.rglob("data_obj/*")
-        if path.is_file() and path.name != ".gitignore"
-    )
+    data_files = tracked_data_files(root, builds[0].manifest.parent)
     if data_files:
         lines.extend(
             [
@@ -655,6 +712,7 @@ def implementation_page(
     lines.extend(f"    - `{rel(path, root)}`" for path in published_closure)
     lines.append("")
     target.write_text("\n".join(lines), encoding="utf-8")
+    write_legacy_redirect(output, root, source, page_name, title)
     return page_name
 
 

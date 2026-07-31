@@ -7,6 +7,7 @@ import argparse
 import importlib.util
 import json
 import re
+import subprocess
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
@@ -295,7 +296,24 @@ def check_site(site: Path, errors: list[str]) -> None:
 
 
 def check_markdown_provenance(root: Path, errors: list[str]) -> None:
-    for path in root.rglob("*.md"):
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "ls-files",
+            "-z",
+            "--",
+            "README.md",
+            ":(glob)docs/**/*.md",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    for relative in result.stdout.decode().split("\0"):
+        if not relative:
+            continue
+        path = root / relative
         text = path.read_text(encoding="utf-8", errors="replace")
         if COMMIT_ID.search(text):
             errors.append(f"{path.relative_to(root)}: exposes a commit ID")

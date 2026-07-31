@@ -339,9 +339,6 @@ promoted cases in the build guide for compiler and model validation.
 The benchmark build or run path uses these checked-in generators/data inputs:
 
 - `benchmark/one-level-arch/test/kernel/control/hashtable_lookup_simd/data_obj/build_data_obj.sh`
-- `benchmark/one-level-arch/test/kernel/control/hashtable_lookup_simd/data_obj/inserted_slot.data`
-- `benchmark/one-level-arch/test/kernel/control/hashtable_lookup_simd/data_obj/lookup_keys.data`
-- `benchmark/one-level-arch/test/kernel/control/hashtable_lookup_simd/data_obj/lookup_values.data`
 - `benchmark/one-level-arch/test/kernel/control/hashtable_lookup_simd/data_obj/probe_statistics.md`
 - `benchmark/one-level-arch/test/kernel/control/hkv/data_obj/build_data_obj.sh`
 

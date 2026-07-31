@@ -203,8 +203,6 @@ promoted cases in the build guide for compiler and model validation.
 The benchmark build or run path uses these checked-in generators/data inputs:
 
 - `benchmark/one-level-arch/test/kernel/sort/topk/data_obj/build_data_obj.sh`
-- `benchmark/one-level-arch/test/kernel/sort/topk/data_obj/input_131072.data`
-- `benchmark/one-level-arch/test/kernel/sort/topk/data_obj/top_2048_out.data`
 
 ## Resolved source closure
 

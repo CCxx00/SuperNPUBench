@@ -55,7 +55,8 @@ inline void TMATMUL(Dst &dst, Lhs &lhs, Rhs &rhs) {
 }
 
 template <typename Dst, typename Previous, typename Lhs, typename Rhs>
-inline void TMATMUL_ACC(Dst &dst, Previous &, Lhs &lhs, Rhs &rhs) {
+inline void TMATMUL_ACC(Dst &dst, Previous &previous, Lhs &lhs, Rhs &rhs) {
+  ::TCOPY(dst, previous);
   ::MATMACC(dst, lhs, rhs);
 }
 
