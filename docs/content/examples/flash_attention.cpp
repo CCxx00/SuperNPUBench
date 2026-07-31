@@ -5,9 +5,9 @@ using namespace pto;
 namespace {
 
 constexpr int kSequence = 16;
-constexpr int kHead = 8;
-constexpr int kQueryRows = 8;
-constexpr int kKeyRows = 8;
+constexpr int kHead = 16;
+constexpr int kQueryRows = 16;
+constexpr int kKeyRows = 16;
 
 using QueryTile = MatrixLeftTile<int, kQueryRows, kHead>;
 using KeyTile = MatrixRightTile<int, kHead, kKeyRows>;
@@ -35,7 +35,8 @@ extern "C" void flash_attention_probe(int *out, int *q, int *k, int *v) {
        ++query_block) {
     QueryTile query;
     OutputValues running;
-    TLOAD(query, query_tiles(query_block, 0));
+    auto query_view = query_tiles(query_block, 0);
+    TLOAD(query, query_view);
 
     for (int key_block = 0; key_block < kSequence / kKeyRows; ++key_block) {
       KeyTile key;
@@ -45,9 +46,11 @@ extern "C" void flash_attention_probe(int *out, int *q, int *k, int *v) {
       ScoreLeft score_left;
       OutputTile output_acc;
       OutputValues contribution;
+      auto key_view = key_tiles(0, key_block);
+      auto value_view = value_tiles(key_block, 0);
 
-      TLOAD(key, key_tiles(0, key_block));
-      TLOAD(value, value_tiles(key_block, 0));
+      TLOAD(key, key_view);
+      TLOAD(value, value_view);
       TMATMUL(score_acc, query, key);
       TCVT(score, score_acc);
       TCVT(score_left, score);
@@ -61,6 +64,7 @@ extern "C" void flash_attention_probe(int *out, int *q, int *k, int *v) {
       }
     }
 
-    TSTORE(output_tiles(query_block, 0), running);
+    auto output_view = output_tiles(query_block, 0);
+    TSTORE(output_view, running);
   }
 }

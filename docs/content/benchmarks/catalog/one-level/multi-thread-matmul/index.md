@@ -7,5 +7,5 @@ This family contains **2** source implementations and
 
 | Implementation | Source | Variants | Intrinsic surface |
 | --- | --- | ---: | --- |
-| [matmul](matmul-fe4e636b.md) | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul.cpp` | 1 | [`TLOAD`](../../../../intrinsics/tload.md), [`TMATMUL`](../../../../intrinsics/tmatmul.md), [`TMATMUL_ACC`](../../../../intrinsics/tmatmul_acc.md), [`TSTORE`](../../../../intrinsics/tstore.md) |
-| [matmul_partial](matmul-partial-1317b2f9.md) | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul_partial.cpp` | 1 | [`TLOAD`](../../../../intrinsics/tload.md), [`TMATMUL`](../../../../intrinsics/tmatmul.md), [`TMATMUL_ACC`](../../../../intrinsics/tmatmul_acc.md) |
+| [matmul](matmul.md) | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul.cpp` | 1 | [`TLOAD`](../../../../intrinsics/tload.md), [`TMATMUL`](../../../../intrinsics/tmatmul.md), [`TMATMUL_ACC`](../../../../intrinsics/tmatmul_acc.md), [`TSTORE`](../../../../intrinsics/tstore.md) |
+| [matmul_partial](matmul-partial.md) | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul_partial.cpp` | 1 | [`TLOAD`](../../../../intrinsics/tload.md), [`TMATMUL`](../../../../intrinsics/tmatmul.md), [`TMATMUL_ACC`](../../../../intrinsics/tmatmul_acc.md) |

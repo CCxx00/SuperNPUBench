@@ -83,5 +83,5 @@ void gemm_tile() {
 
 ## Used by kernels
 
-- [`matmul-a008ac76`](../benchmarks/catalog/one-level/matmul/matmul-a008ac76.md) - `benchmark/one-level-arch/kernels/matmul/matmul.hpp`
-- [`fa-hif4-86b1f297`](../benchmarks/catalog/one-level/fa/fa-hif4-86b1f297.md) - `benchmark/one-level-arch/kernels/fa/fa_hif4.hpp`
+- [`matmul`](../benchmarks/catalog/one-level/matmul/matmul.md) - `benchmark/one-level-arch/kernels/matmul/matmul.hpp`
+- [`fa-hif4`](../benchmarks/catalog/one-level/fa/fa-hif4.md) - `benchmark/one-level-arch/kernels/fa/fa_hif4.hpp`

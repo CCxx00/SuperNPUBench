@@ -70,6 +70,38 @@ def load_catalog() -> dict:
     return catalog
 
 
+def check_linx_contract(catalog: dict, linx_root: Path) -> None:
+    ops_path = linx_root / "isa/v0.57/state/pto_ops.json"
+    map_path = linx_root / "isa/v0.57/state/pto_encoding_map.json"
+    if not ops_path.is_file() or not map_path.is_file():
+        raise ValueError(f"{linx_root} does not contain the canonical v0.57 PTO state")
+
+    operations = json.loads(ops_path.read_text(encoding="utf-8"))
+    encoding_map = json.loads(map_path.read_text(encoding="utf-8"))
+    docs_names = [str(operation["name"]) for operation in catalog["operations"]]
+    isa_names = [str(operation["name"]) for operation in operations["operations"]]
+    map_names = [str(entry["pto_name"]) for entry in encoding_map["entries"]]
+    if docs_names != isa_names:
+        raise ValueError("documentation operation order differs from v0.57 pto_ops.json")
+    if docs_names != map_names:
+        raise ValueError("documentation operation order differs from v0.57 encoding map")
+    if operations.get("operation_count") != 111 or encoding_map.get("entry_count") != 111:
+        raise ValueError("canonical v0.57 PTO state must contain exactly 111 operations")
+
+    operations_by_name = {entry["name"]: entry for entry in operations["operations"]}
+    for entry in encoding_map["entries"]:
+        name = entry["pto_name"]
+        operation = operations_by_name[name]
+        disposition = operation["disposition"]
+        for field in ("canonical_name", "family", "encoding_mnemonic"):
+            expected = operation.get(field, disposition.get(field))
+            if entry.get(field) != expected:
+                raise ValueError(f"{name}: v0.57 operation and encoding map disagree on {field}")
+        for field in ("selector", "function"):
+            if field in disposition and entry.get(field) != disposition[field]:
+                raise ValueError(f"{name}: v0.57 operation and encoding map disagree on {field}")
+
+
 def render_index(catalog: dict) -> str:
     grouped: OrderedDict[str, OrderedDict[str, list[dict]]] = OrderedDict()
     for operation in catalog["operations"]:
@@ -162,9 +194,16 @@ def main() -> None:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--write", action="store_true", help="rewrite the intrinsic index")
     mode.add_argument("--check", action="store_true", help="check catalog/index consistency")
+    parser.add_argument(
+        "--linx-root",
+        type=Path,
+        help="also compare names and encoding identities with a linx-isa checkout",
+    )
     args = parser.parse_args()
 
     catalog = load_catalog()
+    if args.linx_root:
+        check_linx_contract(catalog, args.linx_root.resolve())
     expected = render_index(catalog)
     if args.write:
         INDEX_PATH.write_text(expected, encoding="utf-8")
@@ -179,7 +218,11 @@ def main() -> None:
     mkdocs = MKDOCS_PATH.read_text(encoding="utf-8")
     if replace_nav(mkdocs, render_nav(catalog)) != mkdocs:
         raise SystemExit("intrinsic navigation is stale; run docs/scripts/sync_golden_manual.py --write")
-    print("Intrinsic catalog verified: 111 workbook operations and two identity APIs.")
+    suffix = " and canonical v0.57 ISA state" if args.linx_root else ""
+    print(
+        "Intrinsic catalog verified: 111 workbook operations and two identity APIs"
+        f"{suffix}."
+    )
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@
 the LLVM build root:
 
 ```bash
-export COMPILER_DIR=/path/to/linx_blockisa_llvm_musl/bin
+export COMPILER_DIR=/path/to/linx-isa/compiler/llvm/build-linxisa-clang/bin
 test -x "$COMPILER_DIR/clang"
 test -x "$COMPILER_DIR/ld.lld"
 test -x "$COMPILER_DIR/llvm-objdump"
@@ -23,19 +23,18 @@ set.
 make -n TESTCASE=<case> PLAT=linx COMPILER_DIR="$COMPILER_DIR"
 ```
 
-## Sysroot or Runtime Symbols Are Missing
+## Runtime Symbols Are Missing
 
-The supported build chain keeps the sysroot next to `COMPILER_DIR`. Confirm it
-contains target headers and libraries:
+The promoted TileOP checks are freestanding direct-boot cases and do not use a
+userspace sysroot. Confirm that the command supplies its repository startup
+object and links with the intended entry point:
 
 ```bash
-export TOOLCHAIN_ROOT=$(cd "$COMPILER_DIR/.." && pwd)
-test -d "$TOOLCHAIN_ROOT/sysroot/usr/include"
-find "$TOOLCHAIN_ROOT/sysroot" -name 'libc.a' -o -name 'crt1.o'
+make -n TESTCASE=TAdd PLAT=linx COMPILER_DIR="$COMPILER_DIR"
 ```
 
-Bare-metal cases may use a repository linker script and freestanding runtime
-instead. Follow the exact benchmark command.
+Userspace benchmarks require a separately validated target sysroot. Do not
+infer one from the in-repository compiler build directory.
 
 ## Unsupported Tile Type or Layout
 

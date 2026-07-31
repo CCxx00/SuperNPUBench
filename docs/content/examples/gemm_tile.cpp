@@ -7,9 +7,9 @@ namespace {
 constexpr int kM = 16;
 constexpr int kN = 16;
 constexpr int kK = 16;
-constexpr int kTM = 8;
-constexpr int kTN = 8;
-constexpr int kTK = 8;
+constexpr int kTM = 16;
+constexpr int kTN = 16;
+constexpr int kTK = 16;
 
 using LhsTile = MatrixLeftTile<int, kTM, kTK>;
 using RhsTile = MatrixRightTile<int, kTK, kTN>;
@@ -36,20 +36,25 @@ extern "C" void gemm_tile(int *out, int *lhs, int *rhs) {
       LhsTile left;
       RhsTile right;
       AccTile accum;
+      auto left_view = lhs_tiles(m, 0);
+      auto right_view = rhs_tiles(0, n);
 
-      TLOAD(left, lhs_tiles(m, 0));
-      TLOAD(right, rhs_tiles(0, n));
+      TLOAD(left, left_view);
+      TLOAD(right, right_view);
       TMATMUL(accum, left, right);
 
       for (int k = 1; k < kK / kTK; ++k) {
-        TLOAD(left, lhs_tiles(m, k));
-        TLOAD(right, rhs_tiles(k, n));
+        auto next_left_view = lhs_tiles(m, k);
+        auto next_right_view = rhs_tiles(k, n);
+        TLOAD(left, next_left_view);
+        TLOAD(right, next_right_view);
         TMATMUL_ACC(accum, accum, left, right);
       }
 
       OutTile result;
+      auto out_view = out_tiles(m, n);
       TCVT(result, accum);
-      TSTORE(out_tiles(m, n), result);
+      TSTORE(out_view, result);
     }
   }
 }

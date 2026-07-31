@@ -6,7 +6,7 @@ using pto::SharedMove;
 using pto::SharedTile;
 
 using LocalRows = LocalTile<float, 8, 32>;
-using LocalLeft = MatrixLeftTile<float, 8, 16>;
+using LocalLeft = MatrixLeftTile<float, 16, 16>;
 using SharedMatrix = SharedTile<float, 32, 32>;
 using SharedRight = SharedTile<float, 16, 32>;
 

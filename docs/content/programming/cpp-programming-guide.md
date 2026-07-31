@@ -26,10 +26,13 @@ void add(float* out, float* lhs, float* rhs) {
             Tile a;
             Tile b;
             Tile c;
-            TLOAD(a, lhs_tiles(row, col));
-            TLOAD(b, rhs_tiles(row, col));
+            auto lhs_view = lhs_tiles(row, col);
+            auto rhs_view = rhs_tiles(row, col);
+            auto out_view = out_tiles(row, col);
+            TLOAD(a, lhs_view);
+            TLOAD(b, rhs_view);
             TADD(c, a, b);
-            TSTORE(out_tiles(row, col), c);
+            TSTORE(out_view, c);
         }
     }
 }
@@ -103,8 +106,10 @@ LocalTile<half, kM, kK> left;
 SharedTile<half, kK, kN> right;
 LocalTile<float, kM, kN> accum;
 
-TLOAD(left, a_tiles(thread, k_panel));
-TLOAD(right, b_tiles(k_panel, n_panel));
+auto left_view = a_tiles(thread, k_panel);
+auto right_view = b_tiles(k_panel, n_panel);
+TLOAD(left, left_view);
+TLOAD(right, right_view);
 TMATMUL_ACC(accum, left, right);
 ```
 
@@ -114,34 +119,39 @@ metadata.
 
 ## Build the current toolchain
 
-The benchmark build uses the complete LLVM + musl toolchain produced by
-`LinxISA/linx-toolchain-build`. That repository pins the compiler, C++ runtime,
-sysroot, and tile headers as one install tree.
+Use the LLVM 23 sources pinned by the `linx-isa` superproject. Configure the
+LinxISA experimental target and keep the compiler, QEMU, and LinxCoreModel on
+the same superproject baseline:
 
 ```console
-git clone https://github.com/LinxISA/linx-toolchain-build.git
-cd linx-toolchain-build
-make init-src
-make WITH_TARGET=linx64v5-linux-musl
-export COMPILER_DIR="$PWD/output/linx_blockisa_llvm_musl/bin"
+export LINX_ROOT=/path/to/linx-isa
+cmake -S "$LINX_ROOT/compiler/llvm/llvm" \
+  -B "$LINX_ROOT/compiler/llvm/build-linxisa-clang" -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DLLVM_ENABLE_PROJECTS="clang;lld" \
+  -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=LinxISA \
+  -DLLVM_TARGETS_TO_BUILD=""
+cmake --build "$LINX_ROOT/compiler/llvm/build-linxisa-clang" \
+  --target clang lld llvm-objdump llvm-objcopy llvm-readobj
+export COMPILER_DIR="$LINX_ROOT/compiler/llvm/build-linxisa-clang/bin"
 "$COMPILER_DIR/clang" --version
 ```
 
-The current build chain tracks LLVM branch `dev-llvm15_56` and targets
-`linx64v5-unknown-linux-musl`. Use `gmake` on macOS when GNU Make 4 or newer is
-not the default.
+See [Set Up the Current Toolchain](../start/toolchain.md) for the complete
+compiler, QEMU, and model workflow.
 
 ## Compile and inspect a kernel
 
 ```console
 cd benchmark/one-level-arch/test/kernel/fa
-make TESTCASE=fa_2d_unroll Sq=256 Skv=512 Tm=8 Tk=16 X=1 Y=2
-make TESTCASE=fa_2d_unroll Sq=256 Skv=512 Tm=8 Tk=16 X=1 Y=2 diss
+make -n TESTCASE=fa_2d_unroll Sq=256 Skv=512 Tm=8 Tk=16 X=1 Y=2 \
+  PLAT=linx COMPILER_DIR="$COMPILER_DIR"
 ```
 
-Generated ELF files and disassembly are written below
-`benchmark/one-level-arch/output/`. The [benchmark catalog](../benchmarks/index.md)
-lists every active command and links it to the source reached by the build.
+The [benchmark catalog](../benchmarks/index.md) lists every active one-level
+manifest command and links it to the source reached by the build. Current
+compiler and model validation uses the promoted cases described in
+[Build, Run, and Inspect Generated Code](../start/build-run.md).
 
 ## Continue reading
 

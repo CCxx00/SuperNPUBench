@@ -41,3 +41,22 @@ python3 docs/scripts/generate_deepseek_manual.py
 
 `docs/build.sh` verifies that checked-in generated pages agree with their
 catalogs and that all links in the built site resolve.
+
+## Cross-stack parity
+
+When a checkout is nested at `workloads/SuperNPUBench` in the Linx
+superproject, validate the manual's operation inventory against the canonical
+v0.57 state before publication:
+
+```console
+export LINX_ROOT=/path/to/linx-isa
+python3 "$LINX_ROOT/tools/isa/build_golden.py" --profile v0.57 --check
+python3 "$LINX_ROOT/tools/isa/validate_spec.py" --profile v0.57
+python3 "$LINX_ROOT/tools/isa/check_canonical_v057.py" --root "$LINX_ROOT"
+python3 "$LINX_ROOT/tools/isa/check_pto_v057_manifest.py" --root "$LINX_ROOT"
+python3 docs/scripts/sync_golden_manual.py --check --linx-root "$LINX_ROOT"
+```
+
+Use the compiler and models pinned by that same superproject. Rebuild the
+in-repository Clang before compiling representative cases, and run QEMU before
+promoting an ELF to plain `gfsim -f <elf>`.

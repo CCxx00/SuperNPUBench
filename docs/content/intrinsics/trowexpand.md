@@ -56,4 +56,4 @@ void broadcast_rows() {
 
 ## Used by kernels
 
-- [`broadcast-vec-07-ba7002f4`](../benchmarks/catalog/one-level/broadcast/broadcast-vec-07-ba7002f4.md) - `benchmark/one-level-arch/kernels/broadcast/broadcast_vec_07_pto.hpp`
+- [`broadcast-vec-07`](../benchmarks/catalog/one-level/broadcast/broadcast-vec-07.md) - `benchmark/one-level-arch/kernels/broadcast/broadcast_vec_07_pto.hpp`

@@ -6,8 +6,7 @@ This Engram translation keeps lookup, gating, or gradient work in typed tiles.
 
 | Field | Value |
 | --- | --- |
-| Upstream module | [`tile_kernels/engram/engram_fused_weight_kernel.py`](https://github.com/deepseek-ai/TileKernels/blob/36d9e45d38e204ebb87e6f6e833821eee0482fe5/tile_kernels/engram/engram_fused_weight_kernel.py) |
-| Pinned revision | `36d9e45d38e204ebb87e6f6e833821eee0482fe5` |
+| Upstream module | [`tile_kernels/engram/engram_fused_weight_kernel.py`](https://github.com/deepseek-ai/TileKernels/blob/main/tile_kernels/engram/engram_fused_weight_kernel.py) |
 | C++ function | `fused_weight` |
 | Verification | `source-validated` |
 | Minimum thread fragment | 128 bytes |

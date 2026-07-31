@@ -7,4 +7,4 @@ This family contains **1** source implementations and
 
 | Implementation | Source | Variants | Intrinsic surface |
 | --- | --- | ---: | --- |
-| [topk](topk-0a98c8a8.md) | `benchmark/one-level-arch/test/kernel/sort/topk/topk.cpp` | 1 | [`TSTORE`](../../../../intrinsics/tstore.md) |
+| [topk](topk.md) | `benchmark/one-level-arch/test/kernel/sort/topk/topk.cpp` | 1 | [`TSTORE`](../../../../intrinsics/tstore.md) |

@@ -7,6 +7,7 @@ import argparse
 import importlib.util
 import json
 import re
+import subprocess
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
@@ -21,6 +22,10 @@ INTRINSIC_BANNED = re.compile(
 PUBLIC_BANNED = re.compile(
     r"\b(?:Four-PE|PTO architecture|PTO intrinsic|two-level architecture|microbenchmark architecture)\b",
     re.IGNORECASE,
+)
+COMMIT_ID = re.compile(r"\b[0-9a-f]{40}\b", re.IGNORECASE)
+HASHED_BENCHMARK_ROUTE = re.compile(
+    r"benchmarks/catalog/[^\s)]+-[0-9a-f]{8}\.md\b", re.IGNORECASE
 )
 
 
@@ -180,7 +185,12 @@ def check_benchmarks(root: Path, docs: Path, errors: list[str]) -> None:
             errors.append(f"missing generated benchmark page: {relative}")
             continue
         text = page.read_text(encoding="utf-8")
-        for heading in ("Kernel structure", "Core kernel", "Intrinsic sequence", "Active Build Commands"):
+        for heading in (
+            "Kernel structure",
+            "Core kernel",
+            "Intrinsic sequence",
+            "Manifest Build Commands",
+        ):
             if f"## {heading}" not in text:
                 errors.append(f"{relative}: missing {heading} section")
 
@@ -285,6 +295,32 @@ def check_site(site: Path, errors: list[str]) -> None:
                 errors.append(f"{html.relative_to(site)}: broken link {link}")
 
 
+def check_markdown_provenance(root: Path, errors: list[str]) -> None:
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "ls-files",
+            "-z",
+            "--",
+            "README.md",
+            ":(glob)docs/**/*.md",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    for relative in result.stdout.decode().split("\0"):
+        if not relative:
+            continue
+        path = root / relative
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if COMMIT_ID.search(text):
+            errors.append(f"{path.relative_to(root)}: exposes a commit ID")
+        if HASHED_BENCHMARK_ROUTE.search(text):
+            errors.append(f"{path.relative_to(root)}: links a hash-suffixed benchmark route")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[2])
@@ -298,6 +334,7 @@ def main() -> None:
     check_benchmarks(root, docs, errors)
     check_public_surface(root, docs, errors)
     check_visual_theme(root, errors)
+    check_markdown_provenance(root, errors)
     from verify_pto_kernel_migration import check_migration as check_foundation_migration
     from verify_deepseek_migration import check_migration as check_deepseek_migration
 

@@ -7,4 +7,4 @@ This family contains **1** source implementations and
 
 | Implementation | Source | Variants | Intrinsic surface |
 | --- | --- | ---: | --- |
-| [reducemax_col](reducemax-col-1c7de9cb.md) | `benchmark/one-level-arch/test/kernel/reduction/reducemax_col/src/reducemax_col.cpp` | 1 | [`TCOLMAX`](../../../../intrinsics/tcolmax.md), [`TEXPANDS`](../../../../intrinsics/texpands.md), [`TLOAD`](../../../../intrinsics/tload.md), [`TMAX`](../../../../intrinsics/tmax.md), [`TSTORE`](../../../../intrinsics/tstore.md) |
+| [reducemax_col](reducemax-col.md) | `benchmark/one-level-arch/test/kernel/reduction/reducemax_col/src/reducemax_col.cpp` | 1 | [`TCOLMAX`](../../../../intrinsics/tcolmax.md), [`TEXPANDS`](../../../../intrinsics/texpands.md), [`TLOAD`](../../../../intrinsics/tload.md), [`TMAX`](../../../../intrinsics/tmax.md), [`TSTORE`](../../../../intrinsics/tstore.md) |

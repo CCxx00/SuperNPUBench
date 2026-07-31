@@ -6,8 +6,7 @@ This quantization translation derives scaling factors and converted values witho
 
 | Field | Value |
 | --- | --- |
-| Upstream module | [`tile_kernels/quant/cast_back_kernel.py`](https://github.com/deepseek-ai/TileKernels/blob/36d9e45d38e204ebb87e6f6e833821eee0482fe5/tile_kernels/quant/cast_back_kernel.py) |
-| Pinned revision | `36d9e45d38e204ebb87e6f6e833821eee0482fe5` |
+| Upstream module | [`tile_kernels/quant/cast_back_kernel.py`](https://github.com/deepseek-ai/TileKernels/blob/main/tile_kernels/quant/cast_back_kernel.py) |
 | C++ function | `cast_back_per_token`, `cast_back_per_channel` |
 | Verification | `source-validated` |
 | Minimum thread fragment | 128 bytes |

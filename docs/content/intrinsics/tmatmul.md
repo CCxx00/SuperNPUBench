@@ -61,6 +61,6 @@ void gemm_tile() {
 
 ## Used by kernels
 
-- [`matmul-a008ac76`](../benchmarks/catalog/one-level/matmul/matmul-a008ac76.md) - `benchmark/one-level-arch/kernels/matmul/matmul.hpp`
-- [`hif4-hif4-f0fd84bb`](../benchmarks/catalog/one-level/matmul/hif4-hif4-f0fd84bb.md) - `benchmark/one-level-arch/kernels/matmul/matmul_mx.hpp`
-- [`fa-2d-unroll-b46797ec`](../benchmarks/catalog/one-level/fa/fa-2d-unroll-b46797ec.md) - `benchmark/one-level-arch/kernels/fa/fa_2d_unroll.hpp`
+- [`matmul`](../benchmarks/catalog/one-level/matmul/matmul.md) - `benchmark/one-level-arch/kernels/matmul/matmul.hpp`
+- [`hif4-hif4`](../benchmarks/catalog/one-level/matmul/hif4-hif4.md) - `benchmark/one-level-arch/kernels/matmul/matmul_mx.hpp`
+- [`fa-2d-unroll`](../benchmarks/catalog/one-level/fa/fa-2d-unroll.md) - `benchmark/one-level-arch/kernels/fa/fa_2d_unroll.hpp`

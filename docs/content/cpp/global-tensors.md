@@ -40,7 +40,8 @@ using Tensor = global_tensor<float, RowMajor<128, 256>>;
 using Tiles = global_iterator<Tensor, Tile>;
 
 Tiles tiles(base);
-TLOAD(local, tiles(tile_row, tile_col));
+auto region = tiles(tile_row, tile_col);
+TLOAD(local, region);
 ```
 
 `tile_row` and `tile_col` count `32 x 32` regions. They are not element

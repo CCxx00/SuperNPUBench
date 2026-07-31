@@ -6,8 +6,7 @@ This mixture-of-experts translation keeps routing scores, indices, counts, and e
 
 | Field | Value |
 | --- | --- |
-| Upstream module | [`tile_kernels/moe/inplace_unique_group_indices_kernel.py`](https://github.com/deepseek-ai/TileKernels/blob/36d9e45d38e204ebb87e6f6e833821eee0482fe5/tile_kernels/moe/inplace_unique_group_indices_kernel.py) |
-| Pinned revision | `36d9e45d38e204ebb87e6f6e833821eee0482fe5` |
+| Upstream module | [`tile_kernels/moe/inplace_unique_group_indices_kernel.py`](https://github.com/deepseek-ai/TileKernels/blob/main/tile_kernels/moe/inplace_unique_group_indices_kernel.py) |
 | C++ function | `inplace_unique_group_indices` |
 | Verification | `source-validated` |
 | Minimum thread fragment | 128 bytes |

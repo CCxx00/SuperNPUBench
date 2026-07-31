@@ -57,4 +57,4 @@ void apply_column_scalars() {
 
 ## Used by kernels
 
-- [`fa-hif4-86b1f297`](../benchmarks/catalog/one-level/fa/fa-hif4-86b1f297.md) - `benchmark/one-level-arch/kernels/fa/fa_hif4.hpp`
+- [`fa-hif4`](../benchmarks/catalog/one-level/fa/fa-hif4.md) - `benchmark/one-level-arch/kernels/fa/fa_hif4.hpp`

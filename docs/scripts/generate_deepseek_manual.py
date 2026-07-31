@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the DeepSeek kernel reference from the pinned migration manifest."""
+"""Generate the DeepSeek kernel reference from the migration manifest."""
 
 from __future__ import annotations
 
@@ -75,11 +75,11 @@ def central_function(text: str, names: list[str]) -> str:
     return "\n".join(lines[start : end + 1])
 
 
-def relative_source_link(source: str, revision: str) -> str:
-    return f"https://github.com/deepseek-ai/TileKernels/blob/{revision}/{source}"
+def relative_source_link(source: str) -> str:
+    return f"https://github.com/deepseek-ai/TileKernels/blob/main/{source}"
 
 
-def render_page(root: Path, entry: dict[str, object], revision: str) -> tuple[Path, str]:
+def render_page(root: Path, entry: dict[str, object]) -> tuple[Path, str]:
     family = str(entry["family"])
     source = str(entry["source"])
     implementations = [str(path) for path in entry["implementations"]]
@@ -88,7 +88,7 @@ def render_page(root: Path, entry: dict[str, object], revision: str) -> tuple[Pa
     names = [str(name) for name in entry.get("functions", [])]
     excerpt = central_function(primary_text, names)
     page = Path(f"{family}/{slug(Path(source).stem.removesuffix('_kernel'))}.md")
-    source_url = relative_source_link(source, revision)
+    source_url = relative_source_link(source)
     intrinsics = [str(name) for name in entry["intrinsics"]]
     links = ", ".join(
         f"[`{name}`](../../../intrinsics/{name.lower()}.md)" for name in intrinsics
@@ -122,7 +122,6 @@ def render_page(root: Path, entry: dict[str, object], revision: str) -> tuple[Pa
         "| Field | Value |",
         "| --- | --- |",
         f"| Upstream module | [`{source}`]({source_url}) |",
-        f"| Pinned revision | `{revision}` |",
         f"| C++ function | {function_names} |",
         f"| Verification | `{entry['verification']}` |",
         "| Minimum thread fragment | 128 bytes |",
@@ -179,7 +178,6 @@ def render_page(root: Path, entry: dict[str, object], revision: str) -> tuple[Pa
 def main() -> None:
     root = Path(__file__).resolve().parents[2]
     manifest = json.loads((root / MANIFEST).read_text(encoding="utf-8"))
-    revision = str(manifest["upstream"]["revision"])
     output = root / OUTPUT
     if output.exists():
         shutil.rmtree(output)
@@ -187,7 +185,7 @@ def main() -> None:
 
     family_rows: dict[str, list[tuple[dict[str, object], Path]]] = {}
     for entry in manifest["kernel_modules"]:
-        page, text = render_page(root, entry, revision)
+        page, text = render_page(root, entry)
         target = output / page
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")
@@ -199,11 +197,12 @@ def main() -> None:
         MARKER,
         "",
         f"This reference documents the **{len(manifest['kernel_modules'])} translated modules**",
-        f"currently present from the pinned set of **{manifest['upstream_module_count']} standalone",
+        f"currently present from the upstream inventory of **{manifest['upstream_module_count']} standalone",
         "DeepSeek TileKernels modules**. Helper-only modules are dependencies and do not",
         "receive standalone pages.",
         "",
-        f"**Pinned revision:** `{revision}`",
+        "The machine-readable migration manifest retains the frozen upstream provenance;",
+        "reader-facing source links follow the upstream default branch.",
         "",
     ]
     for family, rows in family_rows.items():

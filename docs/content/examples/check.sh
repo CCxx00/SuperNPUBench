@@ -30,9 +30,11 @@ COMMON_FLAGS=(
   -c
 )
 
-TILE_API_ROOT="$REPO_ROOT/benchmark/one-level-arch"
+TILE_API_ROOT="$REPO_ROOT/benchmark/two-level-arch"
 TILE_API_FLAGS=(
   -fenable-matrix
+  -D__linx
+  -I"$SCRIPT_DIR/include"
   -I"$TILE_API_ROOT/include"
 )
 

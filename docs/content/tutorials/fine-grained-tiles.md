@@ -67,10 +67,13 @@ extern "C" void fine_vector_add(float *out, float *lhs, float *rhs) {
     F32VectorTile left;
     F32VectorTile right;
     F32VectorTile sum;
-    TLOAD(left, lhs_tiles(0, tile_col));
-    TLOAD(right, rhs_tiles(0, tile_col));
+    auto lhs_view = lhs_tiles(0, tile_col);
+    auto rhs_view = rhs_tiles(0, tile_col);
+    auto out_view = out_tiles(0, tile_col);
+    TLOAD(left, lhs_view);
+    TLOAD(right, rhs_view);
     TADD(sum, left, right);
-    TSTORE(out_tiles(0, tile_col), sum);
+    TSTORE(out_view, sum);
   }
 }
 ```
@@ -91,12 +94,14 @@ using MatrixTiles = global_iterator<Matrix, F32MatrixTile>;
 for (int tile_row = 0; tile_row < 4; ++tile_row) {
   for (int tile_col = 0; tile_col < 2; ++tile_col) {
     F32MatrixTile values;
-    F32MatrixTile lower_bounded;
-    F32MatrixTile clamped;
-    TLOAD(values, input_tiles(tile_row, tile_col));
-    TMAXS(lower_bounded, values, low);
-    TMINS(clamped, lower_bounded, high);
-    TSTORE(out_tiles(tile_row, tile_col), clamped);
+    F32MatrixTile scaled;
+    F32MatrixTile shifted;
+    auto input_view = input_tiles(tile_row, tile_col);
+    auto output_view = out_tiles(tile_row, tile_col);
+    TLOAD(values, input_view);
+    TMULS(scaled, values, scale);
+    TADDS(shifted, scaled, bias);
+    TSTORE(output_view, shifted);
   }
 }
 ```
@@ -115,18 +120,26 @@ one another:
 F32VectorTile x0, x1, x2, x3;
 F32VectorTile y0, y1, y2, y3;
 
-TLOAD(x0, input_tiles(0, 0));
-TLOAD(x1, input_tiles(0, 1));
-TLOAD(x2, input_tiles(0, 2));
-TLOAD(x3, input_tiles(0, 3));
+auto in0 = input_tiles(0, 0);
+auto in1 = input_tiles(0, 1);
+auto in2 = input_tiles(0, 2);
+auto in3 = input_tiles(0, 3);
+auto out0 = out_tiles(0, 0);
+auto out1 = out_tiles(0, 1);
+auto out2 = out_tiles(0, 2);
+auto out3 = out_tiles(0, 3);
+TLOAD(x0, in0);
+TLOAD(x1, in1);
+TLOAD(x2, in2);
+TLOAD(x3, in3);
 TADDS(y0, x0, bias);
 TADDS(y1, x1, bias);
 TADDS(y2, x2, bias);
 TADDS(y3, x3, bias);
-TSTORE(out_tiles(0, 0), y0);
-TSTORE(out_tiles(0, 1), y1);
-TSTORE(out_tiles(0, 2), y2);
-TSTORE(out_tiles(0, 3), y3);
+TSTORE(out0, y0);
+TSTORE(out1, y1);
+TSTORE(out2, y2);
+TSTORE(out3, y3);
 ```
 
 Each `yN` depends only on the corresponding `xN`. Tile IDs and versions make
@@ -146,9 +159,11 @@ using RowSums =
 
 InputTile values;
 RowSums sums;
-TLOAD(values, input_tiles(0, 0));
+auto input_view = input_tiles(0, 0);
+auto output_view = output_tiles(0, 0);
+TLOAD(values, input_view);
 TROWSUM(sums, values);
-TSTORE(output_tiles(0, 0), sums);
+TSTORE(output_view, sums);
 ```
 
 `RowSums` retains a 128-byte physical shape but declares only `4 x 1` elements
@@ -166,9 +181,11 @@ using TailTile = LocalTile<float, 1, 32, BLayout::RowMajor,
 
 TailTile values(1, 19);
 TailTile result(1, 19);
-TLOAD(values, input_tiles(0, 0));
+auto input_view = input_tiles(0, 0);
+auto output_view = output_tiles(0, 0);
+TLOAD(values, input_view);
 TADDS(result, values, bias);
-TSTORE(output_tiles(0, 0), result);
+TSTORE(output_view, result);
 ```
 
 Only 19 elements participate. The remaining physical lanes are padding and
@@ -190,9 +207,11 @@ for (int batch = 0; batch < kBatch; ++batch) {
       for (int tc = 0; tc < kWidth / 8; ++tc) {
         LocalTile<float, 4, 8> x;
         LocalTile<float, 4, 8> y;
-        TLOAD(x, input_tiles(tr, tc));
+        auto input_view = input_tiles(tr, tc);
+        auto output_view = output_tiles(tr, tc);
+        TLOAD(x, input_view);
         TRELU(y, x);
-        TSTORE(output_tiles(tr, tc), y);
+        TSTORE(output_view, y);
       }
     }
   }
@@ -225,7 +244,7 @@ access, instruction count, and live tile pressure.
 
 ## Complete Compile-Checked Source
 
-The complete example includes vector addition, a 2D clamp, independent tile
+The complete example includes vector addition, a 2D affine transform, independent tile
 chains, a runtime tail, and a row reduction:
 
 ??? code "fine_grained_tiles.cpp"
