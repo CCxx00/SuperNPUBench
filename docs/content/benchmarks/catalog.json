@@ -1,7 +1,7 @@
 {
   "schema": 3,
-  "active_build_variants": 85,
-  "source_implementations": 50,
+  "active_build_variants": 87,
+  "source_implementations": 51,
   "families": [
     {
       "backend": "One-level",
@@ -153,6 +153,31 @@
         "TMUL",
         "TMULS",
         "TQUANT",
+        "TRECIP",
+        "TROWEXPANDMUL",
+        "TROWEXPANDSUB",
+        "TROWMAX",
+        "TROWSUM",
+        "TSTORE",
+        "TSUB"
+      ]
+    },
+    {
+      "backend": "One-level",
+      "family": "flashMLA",
+      "page": "benchmarks/catalog/one-level/flashmla/index.md",
+      "implementations": 1,
+      "variants": 2,
+      "intrinsics": [
+        "TADD",
+        "TCVT",
+        "TEXP",
+        "TEXPANDS",
+        "TLOAD",
+        "TMATMUL",
+        "TMAX",
+        "TMUL",
+        "TMULS",
         "TRECIP",
         "TROWEXPANDMUL",
         "TROWEXPANDSUB",
@@ -3410,6 +3435,166 @@
     },
     {
       "backend": "One-level",
+      "family": "flashMLA",
+      "manifest": "benchmark/one-level-arch/test/kernel/flashMLA/compile.all",
+      "manifest_line": 8,
+      "command": "make TESTCASE=flashMLA Sq=64 QHeadPerHK=1 NumBlocks=2 MaxBlocksPerSeq=2 Dk=512 Dv=512 DChunk=128 VChunk=128 Tm=16 Tk=16",
+      "testcase": "flashMLA",
+      "source": "benchmark/one-level-arch/test/kernel/flashMLA/src/flashMLA.cpp",
+      "page": "benchmarks/catalog/one-level/flashmla/flashmla.md",
+      "intrinsic_surface_scope": "source-union",
+      "source_intrinsics": [
+        "TADD",
+        "TCVT",
+        "TEXP",
+        "TEXPANDS",
+        "TLOAD",
+        "TMATMUL",
+        "TMAX",
+        "TMUL",
+        "TMULS",
+        "TRECIP",
+        "TROWEXPANDMUL",
+        "TROWEXPANDSUB",
+        "TROWMAX",
+        "TROWSUM",
+        "TSTORE",
+        "TSUB"
+      ],
+      "intrinsic_forms": {
+        "TSTORE": [
+          "TSTORE"
+        ],
+        "TEXPANDS": [
+          "TEXPANDS"
+        ],
+        "TLOAD": [
+          "TLOAD"
+        ],
+        "TMATMUL": [
+          "TMATMUL"
+        ],
+        "TCVT": [
+          "TCVT"
+        ],
+        "TADD": [
+          "TADD"
+        ],
+        "TMULS": [
+          "TMULS"
+        ],
+        "TROWMAX": [
+          "TROWMAX"
+        ],
+        "TMAX": [
+          "TMAX"
+        ],
+        "TSUB": [
+          "TSUB"
+        ],
+        "TEXP": [
+          "TEXP"
+        ],
+        "TMUL": [
+          "TMUL"
+        ],
+        "TROWEXPANDSUB": [
+          "TROWEXPANDSUB"
+        ],
+        "TROWSUM": [
+          "TROWSUM"
+        ],
+        "TRECIP": [
+          "TRECIP"
+        ],
+        "TROWEXPANDMUL": [
+          "TROWEXPANDMUL"
+        ]
+      },
+      "helpers": []
+    },
+    {
+      "backend": "One-level",
+      "family": "flashMLA",
+      "manifest": "benchmark/one-level-arch/test/kernel/flashMLA/compile.all",
+      "manifest_line": 11,
+      "command": "make TESTCASE=flashMLA Sq=32 QHeadPerHK=1 NumBlocks=1 MaxBlocksPerSeq=1 Dk=512 Dv=512 DChunk=128 VChunk=128 Tm=16 Tk=16",
+      "testcase": "flashMLA",
+      "source": "benchmark/one-level-arch/test/kernel/flashMLA/src/flashMLA.cpp",
+      "page": "benchmarks/catalog/one-level/flashmla/flashmla.md",
+      "intrinsic_surface_scope": "source-union",
+      "source_intrinsics": [
+        "TADD",
+        "TCVT",
+        "TEXP",
+        "TEXPANDS",
+        "TLOAD",
+        "TMATMUL",
+        "TMAX",
+        "TMUL",
+        "TMULS",
+        "TRECIP",
+        "TROWEXPANDMUL",
+        "TROWEXPANDSUB",
+        "TROWMAX",
+        "TROWSUM",
+        "TSTORE",
+        "TSUB"
+      ],
+      "intrinsic_forms": {
+        "TSTORE": [
+          "TSTORE"
+        ],
+        "TEXPANDS": [
+          "TEXPANDS"
+        ],
+        "TLOAD": [
+          "TLOAD"
+        ],
+        "TMATMUL": [
+          "TMATMUL"
+        ],
+        "TCVT": [
+          "TCVT"
+        ],
+        "TADD": [
+          "TADD"
+        ],
+        "TMULS": [
+          "TMULS"
+        ],
+        "TROWMAX": [
+          "TROWMAX"
+        ],
+        "TMAX": [
+          "TMAX"
+        ],
+        "TSUB": [
+          "TSUB"
+        ],
+        "TEXP": [
+          "TEXP"
+        ],
+        "TMUL": [
+          "TMUL"
+        ],
+        "TROWEXPANDSUB": [
+          "TROWEXPANDSUB"
+        ],
+        "TROWSUM": [
+          "TROWSUM"
+        ],
+        "TRECIP": [
+          "TRECIP"
+        ],
+        "TROWEXPANDMUL": [
+          "TROWEXPANDMUL"
+        ]
+      },
+      "helpers": []
+    },
+    {
+      "backend": "One-level",
       "family": "gather",
       "manifest": "benchmark/one-level-arch/test/kernel/gather/compile.all",
       "manifest_line": 26,
@@ -4391,8 +4576,8 @@
       "family": "multi_thread/vec",
       "manifest": "benchmark/one-level-arch/test/kernel/multi_thread/vec/compile.all",
       "manifest_line": 6,
-      "command": "make TESTCASE=vec COMPILER_DIR=\"$COMPILER_DIR\" TileRows=16 TileCols=16",
-      "testcase": "vec",
+      "command": "make TESTCASE=tadd COMPILER_DIR=\"$COMPILER_DIR\" TileRows=16 TileCols=16",
+      "testcase": "tadd",
       "source": "benchmark/one-level-arch/test/kernel/multi_thread/vec/src/tadd.cpp",
       "page": "benchmarks/catalog/one-level/multi-thread-vec/tadd.md",
       "intrinsic_surface_scope": "source-union",

@@ -83,7 +83,7 @@ QEMU before the same artifact is promoted to plain `gfsim -f <elf>`.
 <!-- BENCHMARK-CATALOG:START -->
 ## Benchmark catalog
 
-The active one-level manifests contain **85 build variants**. Every name below
+The active one-level manifests contain **87 build variants**. Every name below
 has a source-backed page with its build command and tile intrinsic surface in
 the website's **Benchmark Reference** section.
 Catalog presence records source inventory; it does not imply promotion on the
@@ -125,6 +125,12 @@ current compiler and model flow.
 
 </details>
 
+<details><summary><strong>flashMLA</strong> (1 name, 2 variants)</summary>
+
+`flashMLA`
+
+</details>
+
 <details><summary><strong>gather</strong> (1 name, 1 variant)</summary>
 
 `gather`
@@ -151,7 +157,7 @@ current compiler and model flow.
 
 <details><summary><strong>multi_thread/vec</strong> (2 names, 2 variants)</summary>
 
-`trowsum`, `vec`
+`tadd`, `trowsum`
 
 </details>
 

@@ -7,8 +7,8 @@ implementation page presents the central kernel first, the reached local
 include implementations, the canonical intrinsic surface, exact build
 commands, and required data objects.
 
-**Coverage:** 85 active build variants, 50 source-backed
-implementations, and 17 benchmark families.
+**Coverage:** 87 active build variants, 51 source-backed
+implementations, and 18 benchmark families.
 
 | Family | Implementations | Build variants | Intrinsic surface |
 | --- | ---: | ---: | --- |
@@ -18,6 +18,7 @@ implementations, and 17 benchmark families.
 | [deepseek](catalog/one-level/deepseek/index.md) | 23 | 23 | 34 intrinsics |
 | [element_wise/gelu](catalog/one-level/element-wise-gelu/index.md) | 1 | 1 | 10 intrinsics |
 | [fa](catalog/one-level/fa/index.md) | 4 | 13 | 23 intrinsics |
+| [flashMLA](catalog/one-level/flashmla/index.md) | 1 | 2 | 16 intrinsics |
 | [gather](catalog/one-level/gather/index.md) | 1 | 1 | 3 intrinsics |
 | [matmul](catalog/one-level/matmul/index.md) | 3 | 16 | 11 intrinsics |
 | [multi_thread/fa](catalog/one-level/multi-thread-fa/index.md) | 1 | 1 | 15 intrinsics |

@@ -7,5 +7,5 @@ This family contains **2** source implementations and
 
 | Implementation | Source | Variants | Intrinsic surface |
 | --- | --- | ---: | --- |
-| [vec](tadd.md) | `benchmark/one-level-arch/test/kernel/multi_thread/vec/src/tadd.cpp` | 1 | [`TADD`](../../../../intrinsics/tadd.md), [`TLOAD`](../../../../intrinsics/tload.md), [`TSTORE`](../../../../intrinsics/tstore.md) |
+| [tadd](tadd.md) | `benchmark/one-level-arch/test/kernel/multi_thread/vec/src/tadd.cpp` | 1 | [`TADD`](../../../../intrinsics/tadd.md), [`TLOAD`](../../../../intrinsics/tload.md), [`TSTORE`](../../../../intrinsics/tstore.md) |
 | [trowsum](trowsum.md) | `benchmark/one-level-arch/test/kernel/multi_thread/vec/src/trowsum.cpp` | 1 | [`TLOAD`](../../../../intrinsics/tload.md), [`TROWSUM`](../../../../intrinsics/trowsum.md), [`TSTORE`](../../../../intrinsics/tstore.md) |
