@@ -1,8 +1,14 @@
 #include <common/pto_tileop.hpp>
 #include <cstdint>
 #include "deepseek/quant/cast_back_pto.hpp"
+using namespace pto;
 using namespace supernpu::tile_isa;
+
+static __bf16 x[512] __attribute__((aligned(4096))) = {};
+static float sf[32] __attribute__((aligned(4096))) = {};
+static float out[512] __attribute__((aligned(4096))) = {};
+
 int main() {
-    [[maybe_unused]] auto fn = &cast_back_per_token<__bf16, 16, 16>;
+    cast_back_per_token<__bf16, 16, 16>(x, sf, out);
     return 0;
 }

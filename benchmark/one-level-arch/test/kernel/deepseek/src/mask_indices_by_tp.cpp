@@ -1,8 +1,12 @@
 #include <common/pto_tileop.hpp>
 #include <cstdint>
 #include "deepseek/moe/mask_indices_by_tp_pto.hpp"
+using namespace pto;
 using namespace supernpu::tile_isa;
+
+static std::int32_t indices[256] __attribute__((aligned(4096))) = {};
+
 int main() {
-    [[maybe_unused]] auto fn = &mask_indices_by_tp<16, 8>;
+    mask_indices_by_tp<16, 8>(indices, 1, 1, 1, 0);
     return 0;
 }
