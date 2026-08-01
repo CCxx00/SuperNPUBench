@@ -83,7 +83,7 @@ inline void rms_norm_tile(dtype *x, dtype *out, int64_t gM, int64_t gN,
 template <typename dtype>
 void rms_norm(dtype *x, const int64_t *tiling, dtype *out, float eps = 1e-6f) {
     constexpr int64_t tM = 1;
-    constexpr int64_t tN = 512;
+    constexpr int64_t tN = 1024;
 
     const int64_t gM = tiling[0];
     const int64_t gN = tiling[1];
