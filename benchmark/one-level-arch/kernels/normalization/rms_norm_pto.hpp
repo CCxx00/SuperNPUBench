@@ -14,6 +14,7 @@
 //   → Newton rsqrt → TROWEXPANDMUL → TCVT → TSTORE
 //
 // Dynamic ValidRow/ValidCol: Tile Valid = -1, ctor passes runtime values.
+// Full M tiles in the main loop; trailing rows handled separately.
 // =============================================================================
 #ifndef SUPERNPU_RMS_NORM_PTO_HPP
 #define SUPERNPU_RMS_NORM_PTO_HPP
@@ -23,8 +24,6 @@
 #include <cstdint>
 
 namespace rms_detail {
-
-inline int64_t min64(int64_t a, int64_t b) { return a < b ? a : b; }
 
 template <typename TileVec>
 inline void rsqrt_newton(TileVec &out, TileVec &a) {
@@ -42,6 +41,42 @@ inline void rsqrt_newton(TileVec &out, TileVec &a) {
     TMULS(out, x, 1.0f);
 }
 
+template <typename dtype, typename gm_t, typename tile_h, typename tile_f,
+          typename tile_v>
+inline void rms_norm_tile(dtype *x, dtype *out, int64_t gM, int64_t gN,
+                          int64_t row_off, int64_t active_row,
+                          int64_t active_col, float inv_n, float eps) {
+    const int64_t offset = row_off * gN;
+    gm_t gi(x + offset, static_cast<int>(gM), static_cast<int>(gN));
+    gm_t go(out + offset, static_cast<int>(gM), static_cast<int>(gN));
+
+    tile_h src_h(static_cast<size_t>(active_row),
+                 static_cast<size_t>(active_col));
+    tile_h dst_h(static_cast<size_t>(active_row),
+                 static_cast<size_t>(active_col));
+    tile_f src(static_cast<size_t>(active_row),
+               static_cast<size_t>(active_col));
+    tile_f squared(static_cast<size_t>(active_row),
+                   static_cast<size_t>(active_col));
+    tile_f dst(static_cast<size_t>(active_row),
+               static_cast<size_t>(active_col));
+    tile_v sqrsum(static_cast<size_t>(active_row));
+    tile_v mean(static_cast<size_t>(active_row));
+    tile_v denom(static_cast<size_t>(active_row));
+    tile_v rms(static_cast<size_t>(active_row));
+
+    TLOAD(src_h, gi);
+    TCVT(src, src_h);
+    TMUL(squared, src, src);
+    TROWSUM(sqrsum, squared);
+    TMULS(mean, sqrsum, inv_n);
+    TADDS(denom, mean, eps);
+    rsqrt_newton(rms, denom);
+    TROWEXPANDMUL(dst, src, rms);
+    TCVT(dst_h, dst);
+    TSTORE(go, dst_h);
+}
+
 } // namespace rms_detail
 
 // tiling: [g_m, g_n, tile_m, tile_n]
@@ -55,11 +90,6 @@ void rms_norm(dtype *x, const int64_t *tiling, dtype *out, float eps = 1e-6f) {
     const int64_t tile_m = tiling[2] > 0 ? tiling[2] : tM;
     const int64_t tile_n = tiling[3] > 0 ? tiling[3] : gN;
 
-    if (gM <= 0 || gN <= 0 || tile_m <= 0 || tile_n <= 0 ||
-        tile_m > tM || tile_n > tN) {
-        return;
-    }
-
     using gm_t = global_tensor<dtype, RowMajor<-1, -1>>;
     using tile_h = Tile<Location::Vec, dtype, tM, tN, BLayout::RowMajor, -1, -1>;
     using tile_f = Tile<Location::Vec, float, tM, tN, BLayout::RowMajor, -1, -1>;
@@ -68,40 +98,15 @@ void rms_norm(dtype *x, const int64_t *tiling, dtype *out, float eps = 1e-6f) {
 
     const float inv_n = 1.0f / static_cast<float>(gN);
 
-    for (int64_t i = 0; i < gM; i += tile_m) {
-        const int64_t active_row = rms_detail::min64(tile_m, gM - i);
-        const int64_t active_col = tile_n;
-        const int64_t offset = i * gN;
-
-        gm_t gi(x + offset, static_cast<int>(gM), static_cast<int>(gN));
-        gm_t go(out + offset, static_cast<int>(gM), static_cast<int>(gN));
-
-        tile_h src_h(static_cast<size_t>(active_row),
-                     static_cast<size_t>(active_col));
-        tile_h dst_h(static_cast<size_t>(active_row),
-                     static_cast<size_t>(active_col));
-        tile_f src(static_cast<size_t>(active_row),
-                   static_cast<size_t>(active_col));
-        tile_f squared(static_cast<size_t>(active_row),
-                       static_cast<size_t>(active_col));
-        tile_f dst(static_cast<size_t>(active_row),
-                   static_cast<size_t>(active_col));
-        tile_v sqrsum(static_cast<size_t>(active_row));
-        tile_v mean(static_cast<size_t>(active_row));
-        tile_v denom(static_cast<size_t>(active_row));
-        tile_v rms(static_cast<size_t>(active_row));
-
-        TLOAD(src_h, gi);
-        TCVT(src, src_h);
-        TMUL(squared, src, src);
-        TROWSUM(sqrsum, squared);
-        TMULS(mean, sqrsum, inv_n);
-        TADDS(denom, mean, eps);
-        rms_detail::rsqrt_newton(rms, denom);
-        TROWEXPANDMUL(dst, src, rms);
-        TCVT(dst_h, dst);
-        TSTORE(go, dst_h);
+    // Full M tiles; peel the last iteration for the trailing block.
+    int64_t i = 0;
+    for (; i + tile_m < gM; i += tile_m) {
+        rms_detail::rms_norm_tile<dtype, gm_t, tile_h, tile_f, tile_v>(
+            x, out, gM, gN, i, tile_m, tile_n, inv_n, eps);
     }
+    // Tail (or sole) block: ValidRow = remaining rows.
+    rms_detail::rms_norm_tile<dtype, gm_t, tile_h, tile_f, tile_v>(
+        x, out, gM, gN, i, gM - i, tile_n, inv_n, eps);
 }
 
 #endif // SUPERNPU_RMS_NORM_PTO_HPP
