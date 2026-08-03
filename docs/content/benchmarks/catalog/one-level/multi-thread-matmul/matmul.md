@@ -81,14 +81,14 @@ void matmul_multithread(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
     using gmC = global_tensor<float, RowMajor<gM, gN>>;
 
     using tileA = MatrixLeftTile<dtype, tM, tK>;
-    using tileCAcc = AccumulatorTile<float, tM, tN>;
     using tileC =
         LocalTile< float, tM, tN, BLayout::RowMajor>;
 
-    using tileB = MatrixRightTile<dtype, tK, tN>;
+    using tileBLocal = MatrixRightTile<dtype, tK, tN>;
+    using tileBShared = SharedTile<tileBLocal>;
 
     using itA = global_iterator<gmA, tileA>;
-    using itB = global_iterator<gmB, tileB>;
+    using itB = global_iterator<gmB, tileBLocal>;
     using itC = global_iterator<gmC, tileC>;
 
     itA gIterA(a_ptr);
@@ -101,48 +101,49 @@ void matmul_multithread(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
 
     for (int i = 0; i < Mb; ++i) {
         for (int j = 0; j < Nb; ++j) {
-            tileCAcc tCAcc;
             tileC tC;
 
             if constexpr (Kb == 1) {
                 tileA tA;
-                tileB tB;
+                tileBLocal tBLocal;
 
                 auto gA = gIterA(i, 0);
                 TLOAD(tA, gA);
                 auto gB = gIterB(0, j);
-                TLOAD(tB, gB);
-                TMATMUL_FIXP(tC, tA, tB);
+                TLOAD(tBLocal, gB);
+                tileBShared tBShared = TMOV_L2S_PUBLISH(tBLocal);
+                TMATMUL(tC, tA, tBShared);
             } else {
 
                 {
                     tileA tA;
-                    tileB tB;
+                    tileBLocal tBLocal;
                     auto gA = gIterA(i, 0);
                     auto gB = gIterB(0, j);
                     TLOAD(tA, gA);
-                    TLOAD(tB, gB);
-                    TMATMUL(tCAcc, tA, tB);
+                    TLOAD(tBLocal, gB);
+                    tileBShared tBShared = TMOV_L2S_PUBLISH(tBLocal);
+                    TMATMUL(tC, tA, tBShared);
                 }
 
                 for (int k = 1; k < Kb - 1; ++k) {
                     tileA tA;
-                    tileB tB;
+                    tileBLocal tBLocal;
                     auto gA = gIterA(i, k);
                     auto gB = gIterB(k, j);
                     TLOAD(tA, gA);
-                    TLOAD(tB, gB);
-                    TMATMUL_ACC(tCAcc, tA, tB);
+                    TLOAD(tBLocal, gB);
+
                 }
 
                 {
                     tileA tA;
-                    tileB tB;
+                    tileBLocal tBLocal;
                     auto gA = gIterA(i, Kb - 1);
                     auto gB = gIterB(Kb - 1, j);
                     TLOAD(tA, gA);
-                    TLOAD(tB, gB);
-                    TMATMUL_ACC_FIXP(tC, tCAcc, tA, tB);
+                    TLOAD(tBLocal, gB);
+
                 }
             }
 
@@ -210,18 +211,8 @@ the spellings below use the canonical public operation names.
 | --- | --- | --- |
 | [`TLOAD`](../../../../intrinsics/tload.md) | `TLOAD` | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul.cpp` |
 | [`TMATMUL`](../../../../intrinsics/tmatmul.md) | `TMATMUL` | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul.cpp` |
-| [`TMATMUL_ACC`](../../../../intrinsics/tmatmul_acc.md) | `TMATMUL_ACC` | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul.cpp` |
+| [`TMOV`](../../../../intrinsics/tmov.md) | `TMOV` | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul.cpp` |
 | [`TSTORE`](../../../../intrinsics/tstore.md) | `TSTORE` | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul.cpp` |
-
-### Repository Helper Surface
-
-These uppercase calls are repository wrappers or fused helpers, not distinct
-entries in the public intrinsic reference.
-
-| Helper | Defined or called from |
-| --- | --- |
-| `TMATMUL_ACC_FIXP` | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul.cpp` |
-| `TMATMUL_FIXP` | `benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul.cpp` |
 
 ## Manifest Build Commands
 

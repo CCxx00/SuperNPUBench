@@ -51,13 +51,13 @@ using namespace pto;
 //   - get_thread_idx() selects one complete A/C matrix from those arrays.
 //   - The kernel's gM and tM are already PE-local dimensions; no further
 //     row splitting occurs inside the kernel.
-//   - B is not split. TLOAD places a complete [tK, tN] rhs tile in shared
-//     staging storage for the collective TMATMUL.
+//   - B is not split. Each PE loads the complete [tK, tN] rhs operand into
+//     TileRight.
 //
 // Tile mapping:
 //   - Each PE holds A_pe [tM, tK] and C_pe [tM, tN].
 //   - The four PE-local A cells collectively form A_big [4*tM, tK].
-//   - One shared B tile has shape [tK, tN].
+//   - Each PE presents one TileRight B operand with shape [tK, tN].
 //   - TMATMUL collectively computes C_big [4*tM, tN], while each PE receives
 //     only its own accumulator C_pe [tM, tN].
 template <typename dtype, int gM, int gN, int gK, int tM, int tN, int tK>
@@ -87,15 +87,16 @@ void matmul_multithread(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
 
     // PE-private lhs and output cells.
     using tileA = TileLeft<dtype, tM, tK>;
-    using tileCAcc = TileAcc<float, tM, tN>;
     using tileC =
         Tile<Location::Vec, float, tM, tN, BLayout::RowMajor>;
 
-    // Full rhs tile in shared GMMA staging storage.
-    using tileB = TileRight<dtype, tK, tN>;
+    // TLOAD requires a local tile. Publish it to compiler-managed shared
+    // storage before passing B to the shared-right TMATMUL overload.
+    using tileBLocal = TileRight<dtype, tK, tN>;
+    using tileBShared = SharedTile<tileBLocal>;
 
     using itA = global_iterator<gmA, tileA>;
-    using itB = global_iterator<gmB, tileB>;
+    using itB = global_iterator<gmB, tileBLocal>;
     using itC = global_iterator<gmC, tileC>;
 
     itA gIterA(a_ptr);
@@ -108,56 +109,57 @@ void matmul_multithread(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
 
     for (int i = 0; i < Mb; ++i) {
         for (int j = 0; j < Nb; ++j) {
-            tileCAcc tCAcc;
             tileC tC;
 
             if constexpr (Kb == 1) {
                 tileA tA;
-                tileB tB;
+                tileBLocal tBLocal;
 
                 auto gA = gIterA(i, 0);
                 TLOAD(tA, gA);
                 auto gB = gIterB(0, j);
-                TLOAD(tB, gB);
-                TMATMUL_FIXP(tC, tA, tB);
+                TLOAD(tBLocal, gB);
+                tileBShared tBShared = TMOV_L2S_PUBLISH(tBLocal);
+                TMATMUL(tC, tA, tBShared);
             } else {
-                // Initialize the implicit ACC with the first K block.
+                // Compile-only Shared B experiment: initialize tC from the
+                // first K block and temporarily disable the ACC/FIXP path.
                 {
                     tileA tA;
-                    tileB tB;
+                    tileBLocal tBLocal;
                     auto gA = gIterA(i, 0);
                     auto gB = gIterB(0, j);
                     TLOAD(tA, gA);
-                    TLOAD(tB, gB);
-                    TMATMUL(tCAcc, tA, tB);
+                    TLOAD(tBLocal, gB);
+                    tileBShared tBShared = TMOV_L2S_PUBLISH(tBLocal);
+                    TMATMUL(tC, tA, tBShared);
                 }
 
-                // Accumulate all interior K blocks while keeping ACC live.
+                // Temporarily retained as load-only code so the original loop
+                // structure remains visible during the Shared B experiment.
                 for (int k = 1; k < Kb - 1; ++k) {
                     tileA tA;
-                    tileB tB;
+                    tileBLocal tBLocal;
                     auto gA = gIterA(i, k);
                     auto gB = gIterB(k, j);
                     TLOAD(tA, gA);
-                    TLOAD(tB, gB);
-                    TMATMUL_ACC(tCAcc, tA, tB);
+                    TLOAD(tBLocal, gB);
+                    // TMATMUL_ACC(tCout, tA, tB);
                 }
 
-                // Consume ACC in straight-line control flow and produce an
-                // ordinary tile that can be stored directly.
+                // Keep the final load in place while disabling FIXP.
                 {
                     tileA tA;
-                    tileB tB;
+                    tileBLocal tBLocal;
                     auto gA = gIterA(i, Kb - 1);
                     auto gB = gIterB(Kb - 1, j);
                     TLOAD(tA, gA);
-                    TLOAD(tB, gB);
-                    TMATMUL_ACC_FIXP(tC, tCAcc, tA, tB);
+                    TLOAD(tBLocal, gB);
+                    // TMATMUL_ACC_FIXP(tCout, tA, tB, fixp::keep_acc());
                 }
             }
 
-            // The final K chunk consumes the implicit ACC and writes the
-            // current PE's ordinary C tile directly.
+            // Compile-only experiment: tC currently contains only k=0.
             auto gC = gIterC(i, j);
             TSTORE(gC, tC);
         }

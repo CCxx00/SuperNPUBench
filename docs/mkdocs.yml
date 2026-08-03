@@ -293,7 +293,6 @@ nav:
           - Fa 2d unroll gmma: benchmarks/catalog/one-level/multi-thread-fa/fa-2d-unroll-gmma.md
       - Multi Thread / Matmul:
           - Overview: benchmarks/catalog/one-level/multi-thread-matmul/index.md
-          - Partial grouped matrix multiplication: benchmarks/catalog/one-level/multi-thread-matmul/matmul-partial.md
           - Tiled matrix multiplication: benchmarks/catalog/one-level/multi-thread-matmul/matmul.md
       - Multi Thread / Vec:
           - Overview: benchmarks/catalog/one-level/multi-thread-vec/index.md

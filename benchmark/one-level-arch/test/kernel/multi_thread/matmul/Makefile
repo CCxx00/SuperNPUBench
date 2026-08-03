@@ -34,11 +34,8 @@ DEFINES += -DtilK=$(tK)
 ifeq ($(TESTCASE),matmul)
 SRC_FILE += $(TEST_ROOT)/$(CASE_SRC_DIR)/matmul.cpp
 TARGET = $(ELF_HEAD)_B$(B)_M$(M)_N$(N)_K$(K)_tM$(tM)_tN$(tN)_tK$(tK).elf
-else ifeq ($(TESTCASE),matmul_partial)
-SRC_FILE += $(TEST_ROOT)/$(CASE_SRC_DIR)/matmul_partial.cpp
-TARGET = $(ELF_HEAD)_partial_B$(B)_M$(M)_N$(N)_K$(K)_tM$(tM)_tN$(tN)_tK$(tK).elf
 else
-$(error Unsupported TESTCASE=$(TESTCASE); expected matmul or matmul_partial)
+$(error Unsupported TESTCASE=$(TESTCASE); expected matmul)
 endif
 
 include ../../../common/Makefile.common

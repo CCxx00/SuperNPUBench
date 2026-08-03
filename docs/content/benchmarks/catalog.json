@@ -1,7 +1,7 @@
 {
   "schema": 3,
-  "active_build_variants": 87,
-  "source_implementations": 51,
+  "active_build_variants": 86,
+  "source_implementations": 50,
   "families": [
     {
       "backend": "One-level",
@@ -247,12 +247,12 @@
       "backend": "One-level",
       "family": "multi_thread/matmul",
       "page": "benchmarks/catalog/one-level/multi-thread-matmul/index.md",
-      "implementations": 2,
-      "variants": 2,
+      "implementations": 1,
+      "variants": 1,
       "intrinsics": [
         "TLOAD",
         "TMATMUL",
-        "TMATMUL_ACC",
+        "TMOV",
         "TSTORE"
       ]
     },
@@ -4521,52 +4521,21 @@
       "source_intrinsics": [
         "TLOAD",
         "TMATMUL",
-        "TMATMUL_ACC",
+        "TMOV",
         "TSTORE"
       ],
       "intrinsic_forms": {
         "TLOAD": [
           "TLOAD"
         ],
+        "TMOV": [
+          "TMOV"
+        ],
         "TMATMUL": [
           "TMATMUL"
-        ],
-        "TMATMUL_ACC": [
-          "TMATMUL_ACC"
         ],
         "TSTORE": [
           "TSTORE"
-        ]
-      },
-      "helpers": [
-        "TMATMUL_ACC_FIXP",
-        "TMATMUL_FIXP"
-      ]
-    },
-    {
-      "backend": "One-level",
-      "family": "multi_thread/matmul",
-      "manifest": "benchmark/one-level-arch/test/kernel/multi_thread/matmul/compile.all",
-      "manifest_line": 11,
-      "command": "make TESTCASE=matmul_partial COMPILER_DIR=\"$COMPILER_DIR\" B=1 M=256 N=256 K=256 tM=16 tN=32 tK=32",
-      "testcase": "matmul_partial",
-      "source": "benchmark/one-level-arch/test/kernel/multi_thread/matmul/src/matmul_partial.cpp",
-      "page": "benchmarks/catalog/one-level/multi-thread-matmul/matmul-partial.md",
-      "intrinsic_surface_scope": "source-union",
-      "source_intrinsics": [
-        "TLOAD",
-        "TMATMUL",
-        "TMATMUL_ACC"
-      ],
-      "intrinsic_forms": {
-        "TLOAD": [
-          "TLOAD"
-        ],
-        "TMATMUL": [
-          "TMATMUL"
-        ],
-        "TMATMUL_ACC": [
-          "TMATMUL_ACC"
         ]
       },
       "helpers": []

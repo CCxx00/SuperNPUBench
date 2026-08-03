@@ -7,7 +7,7 @@ implementation page presents the central kernel first, the reached local
 include implementations, the canonical intrinsic surface, exact build
 commands, and required data objects.
 
-**Coverage:** 87 active build variants, 51 source-backed
+**Coverage:** 86 active build variants, 50 source-backed
 implementations, and 18 benchmark families.
 
 | Family | Implementations | Build variants | Intrinsic surface |
@@ -22,7 +22,7 @@ implementations, and 18 benchmark families.
 | [gather](catalog/one-level/gather/index.md) | 1 | 1 | 3 intrinsics |
 | [matmul](catalog/one-level/matmul/index.md) | 3 | 16 | 11 intrinsics |
 | [multi_thread/fa](catalog/one-level/multi-thread-fa/index.md) | 1 | 1 | 15 intrinsics |
-| [multi_thread/matmul](catalog/one-level/multi-thread-matmul/index.md) | 2 | 2 | 4 intrinsics |
+| [multi_thread/matmul](catalog/one-level/multi-thread-matmul/index.md) | 1 | 1 | 4 intrinsics |
 | [multi_thread/vec](catalog/one-level/multi-thread-vec/index.md) | 2 | 2 | 4 intrinsics |
 | [reduction/reducemax_col](catalog/one-level/reduction-reducemax-col/index.md) | 1 | 1 | 5 intrinsics |
 | [reduction/reducemax_row](catalog/one-level/reduction-reducemax-row/index.md) | 1 | 1 | 5 intrinsics |
