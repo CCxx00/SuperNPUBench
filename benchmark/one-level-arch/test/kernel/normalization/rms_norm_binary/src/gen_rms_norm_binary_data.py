@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Generate rms_norm_binary host bins for [1, 8192] fp16.
 
-tiling_info.bin  : 4 x int64 LE = (g_a, g_r, tile_a, tile_r)
+tiling_info.bin  : 5 x int64 LE = (g_a, g_r, tile_a, tile_r, pow_r)
 input.bin        : g_a * g_r x float16
 golden.bin       : out = x * rsqrt(mean(x^2)+eps)  (fp32 compute → fp16)
+
+pow_r: power of two with pow_r < g_r <= 2 * pow_r (Pass1 split).
 """
 
 from __future__ import annotations
@@ -79,11 +81,11 @@ def rms_norm_rows(x_f16: list[float], g_a: int, g_r: int, eps: float) -> list[fl
 
 
 def write_tiling_info(
-    path: Path, g_a: int, g_r: int, tile_a: int, tile_r: int
+    path: Path, g_a: int, g_r: int, tile_a: int, tile_r: int, pow_r: int
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(struct.pack("<4q", g_a, g_r, tile_a, tile_r))
-    print(f"wrote {path}  tiling=({g_a},{g_r},{tile_a},{tile_r})")
+    path.write_bytes(struct.pack("<5q", g_a, g_r, tile_a, tile_r, pow_r))
+    print(f"wrote {path}  tiling=({g_a},{g_r},{tile_a},{tile_r},{pow_r})")
 
 
 def gen_all(
@@ -92,6 +94,7 @@ def gen_all(
     g_r: int,
     tile_a: int,
     tile_r: int,
+    pow_r: int,
     eps: float,
     seed: int,
 ) -> None:
@@ -107,7 +110,7 @@ def gen_all(
     x_f16 = [f16_bits_to_f32(f32_to_f16_bits(v)) for v in x_f32]
     y_f32 = rms_norm_rows(x_f16, g_a, g_r, eps)
 
-    write_tiling_info(out_dir / "tiling_info.bin", g_a, g_r, tile_a, tile_r)
+    write_tiling_info(out_dir / "tiling_info.bin", g_a, g_r, tile_a, tile_r, pow_r)
     in_bytes = pack_f16_list(x_f16)
     gold_bytes = pack_f16_list(y_f32)
     (out_dir / "input.bin").write_bytes(in_bytes)
@@ -122,6 +125,7 @@ def main() -> None:
     parser.add_argument("--g-r", type=int, default=8192)
     parser.add_argument("--tile-a", type=int, default=1)
     parser.add_argument("--tile-r", type=int, default=1024)
+    parser.add_argument("--pow-r", type=int, default=4096)
     parser.add_argument("--eps", type=float, default=1e-6)
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("-o", "--out-dir", type=Path, default=DEFAULT_CMP_DIR)
@@ -134,6 +138,7 @@ def main() -> None:
         args.g_r,
         args.tile_a,
         args.tile_r,
+        args.pow_r,
         args.eps,
         args.seed,
     )
@@ -144,6 +149,7 @@ def main() -> None:
             args.g_r,
             args.tile_a,
             args.tile_r,
+            args.pow_r,
         )
 
 

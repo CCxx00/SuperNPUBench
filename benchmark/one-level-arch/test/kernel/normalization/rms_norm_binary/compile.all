@@ -1,5 +1,5 @@
 #!/bin/bash
-# RMSNorm binary-accumulate: [1,8192] fp16, tile_r=1024 → Rb=8
+# RMSNorm binary-accumulate: [1,8192] fp16, tile_r=1024, pow_r=4096
 set -euo pipefail
 
 : "${COMPILER_DIR:?Set COMPILER_DIR to the linx_blockisa_llvm_musl bin directory}"

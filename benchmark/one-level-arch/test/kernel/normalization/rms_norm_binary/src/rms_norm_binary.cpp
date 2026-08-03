@@ -14,7 +14,8 @@
 #endif
 
 // Spec: shape [g_a, g_r] = [1, 8192], fp16
-// tiling: tile_a=1, tile_r=1024 → Rb=8
+// tiling: tile_a=1, tile_r=1024, pow_r=4096
+//   pow_r is 2^n and pow_r < g_r <= 2*pow_r
 #ifndef G_A
 #define G_A 1
 #endif
@@ -27,6 +28,9 @@
 #ifndef TILE_R
 #define TILE_R 1024
 #endif
+#ifndef POW_R
+#define POW_R 4096
+#endif
 #ifndef K_MAX_LEVELS
 #define K_MAX_LEVELS 6
 #endif
@@ -38,7 +42,7 @@
 int main() {
     using dtype = DType;
 
-    int64_t tiling_info[4] = {G_A, G_R, TILE_A, TILE_R};
+    int64_t tiling_info[5] = {G_A, G_R, TILE_A, TILE_R, POW_R};
 
     const int64_t g_a = tiling_info[0];
     const int64_t g_r = tiling_info[1];
