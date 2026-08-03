@@ -3,7 +3,7 @@
 #include <cstdint>
 
 #include "fileop.h"
-#include "normalization/rms_norm_pto.hpp"
+#include "normalization/rms_norm_binary_pto.hpp"
 
 #ifndef DType
 #define DType __half
@@ -13,19 +13,42 @@
 #define EPS 1e-6f
 #endif
 
+// Spec: shape [g_a, g_r] = [1, 8192], fp16
+// tiling: tile_a=1, tile_r=1024 → Rb=8
+#ifndef G_A
+#define G_A 1
+#endif
+#ifndef G_R
+#define G_R 8192
+#endif
+#ifndef TILE_A
+#define TILE_A 1
+#endif
+#ifndef TILE_R
+#define TILE_R 1024
+#endif
+#ifndef K_MAX_LEVELS
+#define K_MAX_LEVELS 6
+#endif
+// Must match rms_bin::kWsCols
+#ifndef K_WS_COLS
+#define K_WS_COLS 128
+#endif
+
 int main() {
     using dtype = DType;
 
-    // tiling_info: {g_a, g_r, tile_a, tile_r}
-    int64_t tiling_info[4] = {16, 512, 1, -1};
+    int64_t tiling_info[4] = {G_A, G_R, TILE_A, TILE_R};
 
     const int64_t g_a = tiling_info[0];
     const int64_t g_r = tiling_info[1];
 
-    dtype input_buf[16 * 512];
-    dtype output_buf[16 * 512];
+    dtype input_buf[G_A * G_R];
+    dtype output_buf[G_A * G_R];
+    float workspace_buf[K_MAX_LEVELS * G_A * K_WS_COLS];
     dtype *input = input_buf;
     dtype *output = output_buf;
+    float *workspace = workspace_buf;
 
 #ifdef RES_CHECK
 #ifndef CHK_DIR
@@ -35,7 +58,7 @@ int main() {
                    static_cast<size_t>(g_a) * g_r * sizeof(dtype));
 #endif
 
-    rms_norm<dtype>(input, tiling_info, output, EPS);
+    rms_norm_binary<dtype>(input, tiling_info, output, workspace, EPS);
 
 #ifdef RES_CHECK
     writeBinaryFile(CHK_DIR "/output.bin", (uint8_t *)output,
