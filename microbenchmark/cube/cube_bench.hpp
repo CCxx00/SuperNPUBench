@@ -27,7 +27,7 @@ using tL_t = TileLeft<D, M, K>;
 template <typename D, int K, int N>
 using tR_t = TileRight<D, K, N>;
 template <typename D, int M, int N>
-using tAcc_t = TileAcc<float, M, N>;  // ACC is float accumulator regardless of input dtype
+using tAcc_t = Tile<Location::Vec, float, M, N, BLayout::RowMajor>;  // ACC is float accumulator regardless of input dtype
 template <typename D, int M, int N>
 using tOut_t = Tile<Location::Vec, D, M, N, BLayout::RowMajor>;
 
@@ -43,8 +43,7 @@ void bench_matmul(D *c, D *a, D *b) {
     tAcc_t<D, M, N> tAcc; tOut_t<D, M, N> tOut;
     TLOAD(tA, gA0);
     TLOAD(tB, gB0);
-    TMATMUL(tAcc, tA, tB);
-    ACCCVT(tOut, tAcc);
+    TMATMUL(tOut, tA, tB);
     TSTORE(gC0, tOut);
 }
 
@@ -61,7 +60,6 @@ void bench_matmul_acc(D *c, D *a, D *b) {
     TLOAD(tA, gA0);
     TLOAD(tB, gB0);
     TMATMUL_ACC(tAcc, tA, tB);
-    ACCCVT(tOut, tAcc);
     TSTORE(gC0, tOut);
 }
 
@@ -79,8 +77,7 @@ void bench_matmul_bias(D *c, D *a, D *b, D *bias) {
     TLOAD(tA, gA0);
     TLOAD(tB, gB0);
     TLOAD(tBias, gBias0);
-    TMATMUL_BIAS(tAcc, tA, tB, tBias);
-    ACCCVT(tOut, tAcc);
+    TMATMUL_BIAS(tOut, tA, tB, tBias);
     TSTORE(gC0, tOut);
 }
 
@@ -96,8 +93,7 @@ void bench_matmul_mx(D *c, D *a, D *as, D *b, D *bs) {
     tAcc_t<D, M, N> tAcc; tOut_t<D, M, N> tOut;
     TLOAD(tA, gA0); TLOAD(tAs, gAs0);
     TLOAD(tB, gB0); TLOAD(tBs, gBs0);
-    TMATMUL_MX(tAcc, tA, tAs, tB, tBs);
-    ACCCVT(tOut, tAcc);
+    TMATMUL_MX(tOut, tA, tAs, tB, tBs);
     TSTORE(gC0, tOut);
 }
 
@@ -119,7 +115,6 @@ void bench_gemv(D *c, D *a, D *b) {
     TLOAD(tA, gA0);
     TLOAD(tB, gB0);
     TGEMV(tAcc, tA, tB);
-    ACCCVT(tOut, tAcc);
     TSTORE(gC0, tOut);
 }
 
@@ -136,7 +131,6 @@ void bench_gemv_acc(D *c, D *a, D *b) {
     TLOAD(tA, gA0);
     TLOAD(tB, gB0);
     TGEMV_ACC(tAcc, tA, tB);
-    ACCCVT(tOut, tAcc);
     TSTORE(gC0, tOut);
 }
 
@@ -155,7 +149,6 @@ void bench_gemv_bias(D *c, D *a, D *b, D *bias) {
     TLOAD(tB, gB0);
     TLOAD(tBias, gBias0);
     TGEMV_BIAS(tAcc, tA, tB, tBias);
-    ACCCVT(tOut, tAcc);
     TSTORE(gC0, tOut);
 }
 
@@ -172,7 +165,6 @@ void bench_gemv_mx(D *c, D *a, D *as, D *b, D *bs) {
     TLOAD(tA, gA0); TLOAD(tAs, gAs0);
     TLOAD(tB, gB0); TLOAD(tBs, gBs0);
     TGEMV_MX(tAcc, tA, tAs, tB, tBs);
-    ACCCVT(tOut, tAcc);
     TSTORE(gC0, tOut);
 }
 #endif  // FIXME: TGEMV* not exposed yet
@@ -189,8 +181,7 @@ void bench_acccvt(D *c, D *a, D *b) {
     tAcc_t<D, M, N> tAcc; tOut_t<D, M, N> tOut;
     TLOAD(tA, gA0);
     TLOAD(tB, gB0);
-    TMATMUL(tAcc, tA, tB);
-    ACCCVT(tOut, tAcc);
+    TMATMUL(tOut, tA, tB);
     TSTORE(gC0, tOut);
 }
 

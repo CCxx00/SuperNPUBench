@@ -1,3 +1,6 @@
+template <typename E_, int R_, int C_, int VR_=R_, int VC_=C_>
+using TileAcc = pto::Tile<pto::Location::Vec, E_, R_, C_, pto::BLayout::RowMajor, VR_, VC_>;
+
 template <class dtype>
 struct tileW_type {
     using DType = dtype;
@@ -120,7 +123,7 @@ void flash_attention_2d_unroll_pto(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr, d
             TEXPANDS(tSum[x], 0);
         }
 
-        // tPV_out 是每个 Q block 计算 PV 时复用的 Acc tile。
+        // tPV[x] 是每个 Q block 计算 PV 时复用的 Acc tile。
         // tO[x] 保存截至当前 K/V block 的未最终归一化输出:
         //   tO = sum_j exp(score_j - m_current) * V_j
         // tPV[x] 保存当前 K/V unroll 组贡献:
@@ -157,10 +160,9 @@ void flash_attention_2d_unroll_pto(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr, d
             for(int x=0;x<Xdim;x++){
                 #pragma clang loop unroll(full)
                 for(int y=0;y<Ydim;y++){
-                    tileW_out tW_out;
-                    TMATMUL(tW_out, tQ[x], tK[y]);
+                    tileW_out tW[x][y];
+                    TMATMUL(tW[x][y], tQ[x], tK[y]);
                     // Acc/NZ -> Vec ColMajor
-                    ACCCVT(tW[x][y], tW_out);
                     TMULS(tW[x][y], tW[x][y], scale);
                 }
             }
@@ -275,8 +277,8 @@ void flash_attention_2d_unroll_pto(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr, d
 
             // Compute current weighted value:
             //   TCVT      : tExpW Vec ColMajor [kTm,kTk] -> tileW_left Left [kTm,kTk]
-            //   TMATMUL   : first y,  tPV_out = p_y * V_y
-            //   TMATMUL_ACC: next y,  tPV_out += p_y * V_y
+            //   TMATMUL   : first y,  tPV[x] = p_y * V_y
+            //   TMATMUL_ACC: next y,  tPV[x] += p_y * V_y
             //   ACCCVT    : Acc [kTm,vD] -> Vec float tPV[x] [kTm,vD]
             //
             // After this block:
@@ -284,17 +286,16 @@ void flash_attention_2d_unroll_pto(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr, d
             tileW_left tW_left[Xdim][Ydim];
             #pragma clang loop unroll(full)
             for(int x=0;x<Xdim;x++){
-                tileO_out tPV_out;
+                tileO_out tPV[x];
                 #pragma clang loop unroll(full)
                 for(int y=0;y<Ydim;y++){
                     TCVT(tW_left[x][y], tExpW[x][y]);
                     if(y==0){
-                        TMATMUL(tPV_out, tW_left[x][y], tV[y]);
+                        TMATMUL(tPV[x], tW_left[x][y], tV[y]);
                     }else{
-                        TMATMUL_ACC(tPV_out, tW_left[x][y], tV[y]);
+                        TMATMUL_ACC(tPV[x], tPV[x], tW_left[x][y], tV[y]);
                     }
                 }
-                ACCCVT(tPV[x], tPV_out);
             }
 
             // Update online output numerator.

@@ -6,6 +6,9 @@
 
 using namespace pto;
 
+template <typename E_, int R_, int C_, int VR_=R_, int VC_=C_>
+using TileAcc = Tile<Location::Vec, E_, R_, C_, BLayout::RowMajor, VR_, VC_>;
+
 template <typename SrcTile, typename CastTile, typename MaxTile, typename SumTile,
           typename ScaleTile, int scaleD>
 void pto_flash_softmax_block(CastTile &src_exp, MaxTile &new_max, SumTile &new_sum,
@@ -156,9 +159,7 @@ void flash_attention_2d_unroll_hif4(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr,
             for (int x = 0; x < Xdim; ++x) {
                 #pragma clang loop unroll(full)
                 for (int y = 0; y < Ydim; ++y) {
-                    tileWAcc tWAcc;
-                    TMATMUL_MX(tWAcc, tQ[x], tQScale[x], tK[y], tKScale[y]);
-                    TCVT(tW[x][y], tWAcc);
+                    TMATMUL_MX(tW[x][y], tQ[x], tQScale[x], tK[y], tKScale[y]);
                 }
             }
 
@@ -239,18 +240,16 @@ void flash_attention_2d_unroll_hif4(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr,
 
             #pragma clang loop unroll(full)
             for (int x = 0; x < Xdim; ++x) {
-                tileOAcc tPVAcc;
                 #pragma clang loop unroll(full)
                 for (int y = 0; y < Ydim; ++y) {
                     tilePLeft tPLeft;
                     TMOV(tPLeft, tP[x][y]);
                     if (y == 0) {
-                        TMATMUL_MX(tPVAcc, tPLeft, tPScale[x][y], tV[y], tVScale[y]);
+                        TMATMUL_MX(tPV[x], tPLeft, tPScale[x][y], tV[y], tVScale[y]);
                     } else {
-                        TMATMUL_MX(tPVAcc, tPVAcc, tPLeft, tPScale[x][y], tV[y], tVScale[y]);
+                        TMATMUL_MX(tPV[x], tPV[x], tPLeft, tPScale[x][y], tV[y], tVScale[y]);
                     }
                 }
-                TCVT(tPV[x], tPVAcc);
 
                 if (j == 0) {
                     tO[x] = tPV[x];

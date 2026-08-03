@@ -9,20 +9,17 @@
 
 using namespace pto;
 
+template <typename E_, int R_, int C_, int VR_=R_, int VC_=C_>
+using TileAcc = Tile<Location::Vec, E_, R_, C_, BLayout::RowMajor, VR_, VC_>;
+
 template <is_global_data_v GmOut, is_tile_data_v TileAcc>
 void store_acc_tile(GmOut &Gout, TileAcc &tAcc){
-    using TileAccOut = Tile<Location::Vec, typename TileAcc::DType, TileAcc::Rows, TileAcc::Cols, BLayout::RowMajor, TileAcc::ValidRow, TileAcc::ValidCol>;
-    TileAccOut tAccOut;
-    TCVT(tAccOut, tAcc);
-    TSTORE(Gout, tAccOut);
+    TSTORE(Gout, tAcc);
 }
 
 template <is_global_data_v GmOut, is_tile_data_v TileAcc>
 void store_acc_tile_dynamic(GmOut &Gout, TileAcc &tAcc, size_t valid_row, size_t valid_col){
-    using TileAccOut = Tile<Location::Vec, typename TileAcc::DType, TileAcc::Rows, TileAcc::Cols, BLayout::RowMajor, -1, -1>;
-    TileAccOut tAccOut(valid_row, valid_col);
-    TCVT(tAccOut, tAcc);
-    TSTORE(Gout, tAccOut);
+    TSTORE(Gout, tAcc);
 }
 
 // A * B -> C with any shape
@@ -94,7 +91,7 @@ void matmul_mask(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
           tile_shapeB tB;
           TLOAD(tA, gA);
           TLOAD(tB, gB);
-          TMATMUL_ACC(tACC, tA, tB);
+          TMATMUL_ACC(tACC, tACC, tA, tB);
         }
 
         if constexpr (rmd_K) {
@@ -106,12 +103,11 @@ void matmul_mask(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
           TLOAD(tA, gA);
           TLOAD(tB, gB);
           if constexpr(Kb>0){
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
           } else {
             TMATMUL(tACC, tA, tB);
           }
         }
-        // TCVT(tCast, tACC);
         // TSTORE(gC, tCast);
         store_acc_tile(gC, tACC);
       }
@@ -138,7 +134,7 @@ void matmul_mask(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
           tile_shapeB_trows tB;
           TLOAD(tA, gA);
           TLOAD(tB, gB);
-          TMATMUL_ACC(tACC, tA, tB);
+          TMATMUL_ACC(tACC, tACC, tA, tB);
         }
         if constexpr (rmd_K) {
           auto gA = gAIter(i, Kb);
@@ -149,7 +145,7 @@ void matmul_mask(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
           TLOAD(tA, gA);
           TLOAD(tB, gB);
           if constexpr(Kb>0){
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
           } else {
             TMATMUL(tACC, tA, tB);
           }
@@ -181,7 +177,7 @@ void matmul_mask(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
           tile_shapeB tB;
           TLOAD(tA, gA);
           TLOAD(tB, gB);
-          TMATMUL_ACC(tACC, tA, tB);
+          TMATMUL_ACC(tACC, tACC, tA, tB);
         }
         if constexpr (rmd_K) {
           auto gA = gAIter(Mb, Kb);
@@ -192,7 +188,7 @@ void matmul_mask(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
           TLOAD(tA, gA);
           TLOAD(tB, gB);
           if constexpr(Kb>0){
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
           } else {
             TMATMUL(tACC, tA, tB);
           }
@@ -222,7 +218,7 @@ void matmul_mask(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
           tile_shapeB_trows tB;
           TLOAD(tA, gA);
           TLOAD(tB, gB);
-          TMATMUL_ACC(tACC, tA, tB);
+          TMATMUL_ACC(tACC, tACC, tA, tB);
         }
         if constexpr (rmd_K) {
           auto gA = gAIter(Mb, Kb);
@@ -233,7 +229,7 @@ void matmul_mask(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
           TLOAD(tA, gA);
           TLOAD(tB, gB);
           if constexpr(Kb>0){
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
           } else {
             TMATMUL(tACC, tA, tB);
           }
@@ -287,7 +283,7 @@ void matmul_frac(float* dst, dtype* src0, dtype* src1){
                 tile_shapeB tB;
                 TLOAD(tA, gA);
                 TLOAD(tB, gB);
-                TMATMUL_ACC(tACC, tA, tB);
+                TMATMUL_ACC(tACC, tACC, tA, tB);
             }
             store_acc_tile(gC, tACC);
         }
@@ -426,7 +422,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
             if(k==0){
               TMATMUL(tACC, tA[ii][k], tB);
             }else{
-              TMATMUL_ACC(tACC, tA[ii][k], tB);
+              TMATMUL_ACC(tACC, tACC, tA[ii][k], tB);
             }
           }
 
@@ -438,7 +434,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
               auto gB = gIterB(k,j);
               TLOAD(tA,gA);
               TLOAD(tB,gB);
-              TMATMUL_ACC(tACC, tA, tB);
+              TMATMUL_ACC(tACC, tACC, tA, tB);
             }
           }
 
@@ -453,7 +449,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
             TLOAD(tA, gA);
             TLOAD(tB, gB);
             if constexpr(Kb>0){
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
             } else {
               TMATMUL(tACC, tA, tB);
             }
@@ -475,7 +471,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
             if(k==0){
               TMATMUL(tACC, tA[ii][k], tB);
             }else{
-              TMATMUL_ACC(tACC, tA[ii][k], tB);
+              TMATMUL_ACC(tACC, tACC, tA[ii][k], tB);
             }
           }
           static_assert(R.k > Kb);
@@ -488,7 +484,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
               auto gB = gIterB(k,Nb);
               TLOAD(tA,gA);
               TLOAD(tB,gB);
-              TMATMUL_ACC(tACC, tA, tB);
+              TMATMUL_ACC(tACC, tACC, tA, tB);
             }
           }
 
@@ -503,7 +499,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
             TLOAD(tA, gA);
             TLOAD(tB, gB);
             if constexpr(Kb>0){
-              TMATMUL_ACC(tACC, tA, tB);
+              TMATMUL_ACC(tACC, tACC, tA, tB);
             } else {
               TMATMUL(tACC, tA, tB);
             }
@@ -541,7 +537,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
             if(k==0){
               TMATMUL(tACC, tA[i][k], tB);
             }else{
-              TMATMUL_ACC(tACC, tA[i][k], tB);
+              TMATMUL_ACC(tACC, tACC, tA[i][k], tB);
             }
           }
 
@@ -553,7 +549,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
               auto gB = gIterB(k,j);
               TLOAD(tA,gA);
               TLOAD(tB,gB);
-              TMATMUL_ACC(tACC, tA, tB);
+              TMATMUL_ACC(tACC, tACC, tA, tB);
             }
           }
 
@@ -568,7 +564,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
             TLOAD(tA, gA);
             TLOAD(tB, gB);
             if constexpr(Kb>0){
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
             } else {
               TMATMUL(tACC, tA, tB);
             }
@@ -589,7 +585,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
             if(k==0){
               TMATMUL(tACC, tA[i][k], tB);
             }else{
-              TMATMUL_ACC(tACC, tA[i][k], tB);
+              TMATMUL_ACC(tACC, tACC, tA[i][k], tB);
             }
           }
 
@@ -601,7 +597,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
               auto gB = gIterB(k,Nb);
               TLOAD(tA,gA);
               TLOAD(tB,gB);
-              TMATMUL_ACC(tACC, tA, tB);
+              TMATMUL_ACC(tACC, tACC, tA, tB);
             }
           }
 
@@ -616,7 +612,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
             TLOAD(tA, gA);
             TLOAD(tB, gB);
             if constexpr(Kb>0){
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
             } else {
               TMATMUL(tACC, tA, tB);
             }
@@ -649,7 +645,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
           if(k==0){
             TMATMUL(tACC, tA[k], tB);
           }else{
-            TMATMUL_ACC(tACC, tA[k], tB);
+            TMATMUL_ACC(tACC, tACC, tA[k], tB);
           }
         }
 
@@ -661,7 +657,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
             auto gB = gIterB(k,j);
             TLOAD(tA,gA);
             TLOAD(tB,gB);
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
           }
         }
 
@@ -676,7 +672,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
           TLOAD(tA, gA);
           TLOAD(tB, gB);
           if constexpr(Kb>0){
-          TMATMUL_ACC(tACC, tA, tB);
+          TMATMUL_ACC(tACC, tACC, tA, tB);
           } else {
             TMATMUL(tACC, tA, tB);
           }
@@ -697,7 +693,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
           if(k==0){
             TMATMUL(tACC, tA[k], tB);
           }else{
-            TMATMUL_ACC(tACC, tA[k], tB);
+            TMATMUL_ACC(tACC, tACC, tA[k], tB);
           }
         }
 
@@ -709,7 +705,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
             auto gB = gIterB(k,Nb);
             TLOAD(tA,gA);
             TLOAD(tB,gB);
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
           }
         }
 
@@ -724,7 +720,7 @@ void matmul_mask_reuseA(float *dst, dtype *src0, dtype *src1){
           TLOAD(tA, gA);
           TLOAD(tB, gB);
           if constexpr(Kb>0){
-          TMATMUL_ACC(tACC, tA, tB);
+          TMATMUL_ACC(tACC, tACC, tA, tB);
           } else {
             TMATMUL(tACC, tA, tB);
           }
@@ -815,7 +811,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
             auto gB = gIterB(k, j);
             TLOAD(tB, gB);
             if (k == 0) TMATMUL(tACC, tA_phase0[k], tB);
-            else        TMATMUL_ACC(tACC, tA_phase0[k], tB);
+            else        TMATMUL_ACC(tACC, tACC, tA_phase0[k], tB);
           }
           auto gC = gIterC(row, j);
           store_acc_tile(gC, tACC);
@@ -830,7 +826,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
             auto gB = gIterB(k, Nb);
             TLOAD(tB, gB);
             if (k == 0) TMATMUL(tACC, tA_phase0[k], tB);
-            else        TMATMUL_ACC(tACC, tA_phase0[k], tB);
+            else        TMATMUL_ACC(tACC, tACC, tA_phase0[k], tB);
           }
           auto gC = gIterC(row, Nb);
           store_acc_tile(gC, tACC);
@@ -860,7 +856,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
                 auto gB = gIterB(k_base + k, j);
                 TLOAD(tB, gB);
                 if (k == 0) TMATMUL(tACC, tA_chunk[k], tB);
-                else        TMATMUL_ACC(tACC, tA_chunk[k], tB);
+                else        TMATMUL_ACC(tACC, tACC, tA_chunk[k], tB);
               }
               auto gC = gIterC(row, j);
               store_acc_tile(gC, tACC);
@@ -875,7 +871,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
                 auto gB = gIterB(k_base + k, Nb);
                 TLOAD(tB, gB);
                 if (k == 0) TMATMUL(tACC, tA_chunk[k], tB);
-                else        TMATMUL_ACC(tACC, tA_chunk[k], tB);
+                else        TMATMUL_ACC(tACC, tACC, tA_chunk[k], tB);
               }
               auto gC = gIterC(row, Nb);
               store_acc_tile(gC, tACC);
@@ -904,7 +900,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
               auto gB = gIterB(k_base + k, j);
               TLOAD(tB, gB);
               if (k == 0) TMATMUL(tACC, tA_tail[k], tB);
-              else        TMATMUL_ACC(tACC, tA_tail[k], tB);
+              else        TMATMUL_ACC(tACC, tACC, tA_tail[k], tB);
             }
             auto gC = gIterC(row, j);
             store_acc_tile(gC, tACC);
@@ -919,7 +915,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
               auto gB = gIterB(k_base + k, Nb);
               TLOAD(tB, gB);
               if (k == 0) TMATMUL(tACC, tA_tail[k], tB);
-              else        TMATMUL_ACC(tACC, tA_tail[k], tB);
+              else        TMATMUL_ACC(tACC, tACC, tA_tail[k], tB);
             }
             auto gC = gIterC(row, Nb);
             store_acc_tile(gC, tACC);
@@ -939,7 +935,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
             tile_shapeB_tcols tB;
             auto gB = gIterB(Kb, j);
             TLOAD(tB, gB);
-            if constexpr (Kb > 0) TMATMUL_ACC(tACC, tA_rmdK, tB);
+            if constexpr (Kb > 0) TMATMUL_ACC(tACC, tACC, tA_rmdK, tB);
             else                  TMATMUL(tACC, tA_rmdK, tB);
             auto gC = gIterC(row, j);
             store_acc_tile(gC, tACC);
@@ -951,7 +947,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
             tile_shapeB_tcorner tB;
             auto gB = gIterB(Kb, Nb);
             TLOAD(tB, gB);
-            if constexpr (Kb > 0) TMATMUL_ACC(tACC, tA_rmdK, tB);
+            if constexpr (Kb > 0) TMATMUL_ACC(tACC, tACC, tA_rmdK, tB);
             else                  TMATMUL(tACC, tA_rmdK, tB);
             auto gC = gIterC(row, Nb);
             store_acc_tile(gC, tACC);
@@ -986,7 +982,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
             auto gB = gIterB(k, j);
             TLOAD(tB, gB);
             if (k == 0) TMATMUL(tACC, tA_phase0[k], tB);
-            else        TMATMUL_ACC(tACC, tA_phase0[k], tB);
+            else        TMATMUL_ACC(tACC, tACC, tA_phase0[k], tB);
           }
           auto gC = gIterC(row, j);
           store_acc_tile(gC, tACC);
@@ -1000,7 +996,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
             auto gB = gIterB(k, Nb);
             TLOAD(tB, gB);
             if (k == 0) TMATMUL(tACC, tA_phase0[k], tB);
-            else        TMATMUL_ACC(tACC, tA_phase0[k], tB);
+            else        TMATMUL_ACC(tACC, tACC, tA_phase0[k], tB);
           }
           auto gC = gIterC(row, Nb);
           store_acc_tile(gC, tACC);
@@ -1028,7 +1024,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
                 auto gB = gIterB(k_base + k, j);
                 TLOAD(tB, gB);
                 if (k == 0) TMATMUL(tACC, tA_chunk[k], tB);
-                else        TMATMUL_ACC(tACC, tA_chunk[k], tB);
+                else        TMATMUL_ACC(tACC, tACC, tA_chunk[k], tB);
               }
               auto gC = gIterC(row, j);
               store_acc_tile(gC, tACC);
@@ -1042,7 +1038,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
                 auto gB = gIterB(k_base + k, Nb);
                 TLOAD(tB, gB);
                 if (k == 0) TMATMUL(tACC, tA_chunk[k], tB);
-                else        TMATMUL_ACC(tACC, tA_chunk[k], tB);
+                else        TMATMUL_ACC(tACC, tACC, tA_chunk[k], tB);
               }
               auto gC = gIterC(row, Nb);
               store_acc_tile(gC, tACC);
@@ -1070,7 +1066,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
               auto gB = gIterB(k_base + k, j);
               TLOAD(tB, gB);
               if (k == 0) TMATMUL(tACC, tA_tail[k], tB);
-              else        TMATMUL_ACC(tACC, tA_tail[k], tB);
+              else        TMATMUL_ACC(tACC, tACC, tA_tail[k], tB);
             }
             auto gC = gIterC(row, j);
             store_acc_tile(gC, tACC);
@@ -1084,7 +1080,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
               auto gB = gIterB(k_base + k, Nb);
               TLOAD(tB, gB);
               if (k == 0) TMATMUL(tACC, tA_tail[k], tB);
-              else        TMATMUL_ACC(tACC, tA_tail[k], tB);
+              else        TMATMUL_ACC(tACC, tACC, tA_tail[k], tB);
             }
             auto gC = gIterC(row, Nb);
             store_acc_tile(gC, tACC);
@@ -1103,7 +1099,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
             tile_shapeB_tcols tB;
             auto gB = gIterB(Kb, j);
             TLOAD(tB, gB);
-            if constexpr (Kb > 0) TMATMUL_ACC(tACC, tA_rmdK, tB);
+            if constexpr (Kb > 0) TMATMUL_ACC(tACC, tACC, tA_rmdK, tB);
             else                  TMATMUL(tACC, tA_rmdK, tB);
             auto gC = gIterC(row, j);
             store_acc_tile(gC, tACC);
@@ -1114,7 +1110,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
             tile_shapeB_tcorner tB;
             auto gB = gIterB(Kb, Nb);
             TLOAD(tB, gB);
-            if constexpr (Kb > 0) TMATMUL_ACC(tACC, tA_rmdK, tB);
+            if constexpr (Kb > 0) TMATMUL_ACC(tACC, tACC, tA_rmdK, tB);
             else                  TMATMUL(tACC, tA_rmdK, tB);
             auto gC = gIterC(row, Nb);
             store_acc_tile(gC, tACC);
@@ -1146,7 +1142,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
           auto gB = gIterB(k, j);
           TLOAD(tB, gB);
           if (k == 0) TMATMUL(tACC, tA_phase0[k], tB);
-          else        TMATMUL_ACC(tACC, tA_phase0[k], tB);
+          else        TMATMUL_ACC(tACC, tACC, tA_phase0[k], tB);
         }
         auto gC = gIterC(Mb, j);
         store_acc_tile(gC, tACC);
@@ -1160,7 +1156,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
           auto gB = gIterB(k, Nb);
           TLOAD(tB, gB);
           if (k == 0) TMATMUL(tACC, tA_phase0[k], tB);
-          else        TMATMUL_ACC(tACC, tA_phase0[k], tB);
+          else        TMATMUL_ACC(tACC, tACC, tA_phase0[k], tB);
         }
         auto gC = gIterC(Mb, Nb);
         store_acc_tile(gC, tACC);
@@ -1188,7 +1184,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
               auto gB = gIterB(k_base + k, j);
               TLOAD(tB, gB);
               if (k == 0) TMATMUL(tACC, tA_chunk[k], tB);
-              else        TMATMUL_ACC(tACC, tA_chunk[k], tB);
+              else        TMATMUL_ACC(tACC, tACC, tA_chunk[k], tB);
             }
             auto gC = gIterC(Mb, j);
             store_acc_tile(gC, tACC);
@@ -1202,7 +1198,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
               auto gB = gIterB(k_base + k, Nb);
               TLOAD(tB, gB);
               if (k == 0) TMATMUL(tACC, tA_chunk[k], tB);
-              else        TMATMUL_ACC(tACC, tA_chunk[k], tB);
+              else        TMATMUL_ACC(tACC, tACC, tA_chunk[k], tB);
             }
             auto gC = gIterC(Mb, Nb);
             store_acc_tile(gC, tACC);
@@ -1230,7 +1226,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
             auto gB = gIterB(k_base + k, j);
             TLOAD(tB, gB);
             if (k == 0) TMATMUL(tACC, tA_tail[k], tB);
-            else        TMATMUL_ACC(tACC, tA_tail[k], tB);
+            else        TMATMUL_ACC(tACC, tACC, tA_tail[k], tB);
           }
           auto gC = gIterC(Mb, j);
           store_acc_tile(gC, tACC);
@@ -1244,7 +1240,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
             auto gB = gIterB(k_base + k, Nb);
             TLOAD(tB, gB);
             if (k == 0) TMATMUL(tACC, tA_tail[k], tB);
-            else        TMATMUL_ACC(tACC, tA_tail[k], tB);
+            else        TMATMUL_ACC(tACC, tACC, tA_tail[k], tB);
           }
           auto gC = gIterC(Mb, Nb);
           store_acc_tile(gC, tACC);
@@ -1263,7 +1259,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
           tile_shapeB_tcols tB;
           auto gB = gIterB(Kb, j);
           TLOAD(tB, gB);
-          if constexpr (Kb > 0) TMATMUL_ACC(tACC, tA_rmdK, tB);
+          if constexpr (Kb > 0) TMATMUL_ACC(tACC, tACC, tA_rmdK, tB);
           else                  TMATMUL(tACC, tA_rmdK, tB);
           auto gC = gIterC(Mb, j);
           store_acc_tile(gC, tACC);
@@ -1274,7 +1270,7 @@ void matmul_mask_reuseA_OPT(float *dst, dtype *src0, dtype *src1){
           tile_shapeB_tcorner tB;
           auto gB = gIterB(Kb, Nb);
           TLOAD(tB, gB);
-          if constexpr (Kb > 0) TMATMUL_ACC(tACC, tA_rmdK, tB);
+          if constexpr (Kb > 0) TMATMUL_ACC(tACC, tACC, tA_rmdK, tB);
           else                  TMATMUL(tACC, tA_rmdK, tB);
           auto gC = gIterC(Mb, Nb);
           store_acc_tile(gC, tACC);
@@ -1392,9 +1388,8 @@ void matmul_mask_reuseA_OPT2(float *dst, dtype *src0, dtype *src1){
               auto gB = gIterB(k_base + k, j);
               TLOAD(tB, gB);
               if (k == 0) TMATMUL(tACC, tA[k], tB);
-              else        TMATMUL_ACC(tACC, tA[k], tB);
+              else        TMATMUL_ACC(tACC, tACC, tA[k], tB);
             }
-            TCVT(tC_main[row][j], tACC);   // is_first: 直接覆盖
           }
 
           if constexpr (rmd_N) {
@@ -1405,9 +1400,8 @@ void matmul_mask_reuseA_OPT2(float *dst, dtype *src0, dtype *src1){
               auto gB = gIterB(k_base + k, Nb);
               TLOAD(tB, gB);
               if (k == 0) TMATMUL(tACC, tA[k], tB);
-              else        TMATMUL_ACC(tACC, tA[k], tB);
+              else        TMATMUL_ACC(tACC, tACC, tA[k], tB);
             }
-            TCVT(tC_rcol[row], tACC);
           }
         } // row
 
@@ -1429,9 +1423,8 @@ void matmul_mask_reuseA_OPT2(float *dst, dtype *src0, dtype *src1){
               auto gB = gIterB(k_base + k, j);
               TLOAD(tB, gB);
               if (k == 0) TMATMUL(tACC, tA[k], tB);
-              else        TMATMUL_ACC(tACC, tA[k], tB);
+              else        TMATMUL_ACC(tACC, tACC, tA[k], tB);
             }
-            TCVT(tC_rrow[j], tACC);
           }
 
           if constexpr (rmd_N) {
@@ -1442,9 +1435,8 @@ void matmul_mask_reuseA_OPT2(float *dst, dtype *src0, dtype *src1){
               auto gB = gIterB(k_base + k, Nb);
               TLOAD(tB, gB);
               if (k == 0) TMATMUL(tACC, tA[k], tB);
-              else        TMATMUL_ACC(tACC, tA[k], tB);
+              else        TMATMUL_ACC(tACC, tACC, tA[k], tB);
             }
-            TCVT(tC_corner, tACC);
           }
         }
       } // chunk[0]
@@ -1475,10 +1467,9 @@ void matmul_mask_reuseA_OPT2(float *dst, dtype *src0, dtype *src1){
                 auto gB = gIterB(k_base + k, j);
                 TLOAD(tB, gB);
                 if (k == 0) TMATMUL(tACC, tA[k], tB);
-                else        TMATMUL_ACC(tACC, tA[k], tB);
+                else        TMATMUL_ACC(tACC, tACC, tA[k], tB);
               }
               tile_C_out tACC_vec;
-              TCVT(tACC_vec, tACC);
               TADD(tC_main[row][j], tC_main[row][j], tACC_vec);
             }
 
@@ -1490,10 +1481,9 @@ void matmul_mask_reuseA_OPT2(float *dst, dtype *src0, dtype *src1){
                 auto gB = gIterB(k_base + k, Nb);
                 TLOAD(tB, gB);
                 if (k == 0) TMATMUL(tACC, tA[k], tB);
-                else        TMATMUL_ACC(tACC, tA[k], tB);
+                else        TMATMUL_ACC(tACC, tACC, tA[k], tB);
               }
               tile_C_out_trows tACC_vec;
-              TCVT(tACC_vec, tACC);
               TADD(tC_rcol[row], tC_rcol[row], tACC_vec);
             }
           } // row
@@ -1515,10 +1505,9 @@ void matmul_mask_reuseA_OPT2(float *dst, dtype *src0, dtype *src1){
                 auto gB = gIterB(k_base + k, j);
                 TLOAD(tB, gB);
                 if (k == 0) TMATMUL(tACC, tA[k], tB);
-                else        TMATMUL_ACC(tACC, tA[k], tB);
+                else        TMATMUL_ACC(tACC, tACC, tA[k], tB);
               }
               tile_C_out_tcols tACC_vec;
-              TCVT(tACC_vec, tACC);
               TADD(tC_rrow[j], tC_rrow[j], tACC_vec);
             }
 
@@ -1530,10 +1519,9 @@ void matmul_mask_reuseA_OPT2(float *dst, dtype *src0, dtype *src1){
                 auto gB = gIterB(k_base + k, Nb);
                 TLOAD(tB, gB);
                 if (k == 0) TMATMUL(tACC, tA[k], tB);
-                else        TMATMUL_ACC(tACC, tA[k], tB);
+                else        TMATMUL_ACC(tACC, tACC, tA[k], tB);
               }
               tile_C_out_tcorner tACC_vec;
-              TCVT(tACC_vec, tACC);
               TADD(tC_corner, tC_corner, tACC_vec);
             }
           }
@@ -1568,13 +1556,11 @@ void matmul_mask_reuseA_OPT2(float *dst, dtype *src0, dtype *src1){
             auto gB = gIterB(k_base + k, j);
             TLOAD(tB, gB);
             if (k == 0) TMATMUL(tACC, tA[k], tB);
-            else        TMATMUL_ACC(tACC, tA[k], tB);
+            else        TMATMUL_ACC(tACC, tACC, tA[k], tB);
           }
           if constexpr (is_first) {
-            TCVT(tC_main[row][j], tACC);
           } else {
             tile_C_out tACC_vec;
-            TCVT(tACC_vec, tACC);
             TADD(tC_main[row][j], tC_main[row][j], tACC_vec);
           }
         }
@@ -1587,13 +1573,11 @@ void matmul_mask_reuseA_OPT2(float *dst, dtype *src0, dtype *src1){
             auto gB = gIterB(k_base + k, Nb);
             TLOAD(tB, gB);
             if (k == 0) TMATMUL(tACC, tA[k], tB);
-            else        TMATMUL_ACC(tACC, tA[k], tB);
+            else        TMATMUL_ACC(tACC, tACC, tA[k], tB);
           }
           if constexpr (is_first) {
-            TCVT(tC_rcol[row], tACC);
           } else {
             tile_C_out_trows tACC_vec;
-            TCVT(tACC_vec, tACC);
             TADD(tC_rcol[row], tC_rcol[row], tACC_vec);
           }
         }
@@ -1616,13 +1600,11 @@ void matmul_mask_reuseA_OPT2(float *dst, dtype *src0, dtype *src1){
             auto gB = gIterB(k_base + k, j);
             TLOAD(tB, gB);
             if (k == 0) TMATMUL(tACC, tA[k], tB);
-            else        TMATMUL_ACC(tACC, tA[k], tB);
+            else        TMATMUL_ACC(tACC, tACC, tA[k], tB);
           }
           if constexpr (is_first) {
-            TCVT(tC_rrow[j], tACC);
           } else {
             tile_C_out_tcols tACC_vec;
-            TCVT(tACC_vec, tACC);
             TADD(tC_rrow[j], tC_rrow[j], tACC_vec);
           }
         }
@@ -1635,13 +1617,11 @@ void matmul_mask_reuseA_OPT2(float *dst, dtype *src0, dtype *src1){
             auto gB = gIterB(k_base + k, Nb);
             TLOAD(tB, gB);
             if (k == 0) TMATMUL(tACC, tA[k], tB);
-            else        TMATMUL_ACC(tACC, tA[k], tB);
+            else        TMATMUL_ACC(tACC, tACC, tA[k], tB);
           }
           if constexpr (is_first) {
-            TCVT(tC_corner, tACC);
           } else {
             tile_C_out_tcorner tACC_vec;
-            TCVT(tACC_vec, tACC);
             TADD(tC_corner, tC_corner, tACC_vec);
           }
         }
@@ -1670,10 +1650,8 @@ void matmul_mask_reuseA_OPT2(float *dst, dtype *src0, dtype *src1){
           TMATMUL(tACC, tA_rmdK, tB);
 
           if constexpr (is_first) {
-            TCVT(tC_main[row][j], tACC);
           } else {
             tile_C_out tACC_vec;
-            TCVT(tACC_vec, tACC);
             TADD(tC_main[row][j], tC_main[row][j], tACC_vec);
           }
         }
@@ -1686,10 +1664,8 @@ void matmul_mask_reuseA_OPT2(float *dst, dtype *src0, dtype *src1){
           TMATMUL(tACC, tA_rmdK, tB);
 
           if constexpr (is_first) {
-            TCVT(tC_rcol[row], tACC);
           } else {
             tile_C_out_trows tACC_vec;
-            TCVT(tACC_vec, tACC);
             TADD(tC_rcol[row], tC_rcol[row], tACC_vec);
           }
         }
@@ -1709,10 +1685,8 @@ void matmul_mask_reuseA_OPT2(float *dst, dtype *src0, dtype *src1){
           TMATMUL(tACC, tA_rmdK, tB);
 
           if constexpr (is_first) {
-            TCVT(tC_rrow[j], tACC);
           } else {
             tile_C_out_tcols tACC_vec;
-            TCVT(tACC_vec, tACC);
             TADD(tC_rrow[j], tC_rrow[j], tACC_vec);
           }
         }
@@ -1725,10 +1699,8 @@ void matmul_mask_reuseA_OPT2(float *dst, dtype *src0, dtype *src1){
           TMATMUL(tACC, tA_rmdK, tB);
 
           if constexpr (is_first) {
-            TCVT(tC_corner, tACC);
           } else {
             tile_C_out_tcorner tACC_vec;
-            TCVT(tACC_vec, tACC);
             TADD(tC_corner, tC_corner, tACC_vec);
           }
         }
@@ -1885,9 +1857,8 @@ void matmul_mask_reuseB_OPT2(float *dst, dtype *src0, dtype *src1){
               auto gA = gIterA(row, k_base + k);
               TLOAD(tA, gA);
               if (k == 0) TMATMUL(tACC, tA, tB[k]);
-              else        TMATMUL_ACC(tACC, tA, tB[k]);
+              else        TMATMUL_ACC(tACC, tACC, tA, tB[k]);
             }
-            TCVT(tC_main[row][col], tACC);   // is_first: 直接覆盖
           }
 
           if constexpr (rmd_M) {
@@ -1898,9 +1869,8 @@ void matmul_mask_reuseB_OPT2(float *dst, dtype *src0, dtype *src1){
               auto gA = gIterA(Mb, k_base + k);
               TLOAD(tA, gA);
               if (k == 0) TMATMUL(tACC, tA, tB[k]);
-              else        TMATMUL_ACC(tACC, tA, tB[k]);
+              else        TMATMUL_ACC(tACC, tACC, tA, tB[k]);
             }
-            TCVT(tC_rrow[col], tACC);
           }
         } // col
 
@@ -1922,9 +1892,8 @@ void matmul_mask_reuseB_OPT2(float *dst, dtype *src0, dtype *src1){
               auto gA = gIterA(row, k_base + k);
               TLOAD(tA, gA);
               if (k == 0) TMATMUL(tACC, tA, tB[k]);
-              else        TMATMUL_ACC(tACC, tA, tB[k]);
+              else        TMATMUL_ACC(tACC, tACC, tA, tB[k]);
             }
-            TCVT(tC_rcol[row], tACC);
           }
 
           if constexpr (rmd_M) {
@@ -1935,9 +1904,8 @@ void matmul_mask_reuseB_OPT2(float *dst, dtype *src0, dtype *src1){
               auto gA = gIterA(Mb, k_base + k);
               TLOAD(tA, gA);
               if (k == 0) TMATMUL(tACC, tA, tB[k]);
-              else        TMATMUL_ACC(tACC, tA, tB[k]);
+              else        TMATMUL_ACC(tACC, tACC, tA, tB[k]);
             }
-            TCVT(tC_corner, tACC);
           }
         }
       } // chunk[0]
@@ -1968,10 +1936,9 @@ void matmul_mask_reuseB_OPT2(float *dst, dtype *src0, dtype *src1){
                 auto gA = gIterA(row, k_base + k);
                 TLOAD(tA, gA);
                 if (k == 0) TMATMUL(tACC, tA, tB[k]);
-                else        TMATMUL_ACC(tACC, tA, tB[k]);
+                else        TMATMUL_ACC(tACC, tACC, tA, tB[k]);
               }
               tile_C_out tACC_vec;
-              TCVT(tACC_vec, tACC);
               TADD(tC_main[row][col], tC_main[row][col], tACC_vec);
             }
 
@@ -1983,10 +1950,9 @@ void matmul_mask_reuseB_OPT2(float *dst, dtype *src0, dtype *src1){
                 auto gA = gIterA(Mb, k_base + k);
                 TLOAD(tA, gA);
                 if (k == 0) TMATMUL(tACC, tA, tB[k]);
-                else        TMATMUL_ACC(tACC, tA, tB[k]);
+                else        TMATMUL_ACC(tACC, tACC, tA, tB[k]);
               }
               tile_C_out_tcols tACC_vec;
-              TCVT(tACC_vec, tACC);
               TADD(tC_rrow[col], tC_rrow[col], tACC_vec);
             }
           } // col
@@ -2008,10 +1974,9 @@ void matmul_mask_reuseB_OPT2(float *dst, dtype *src0, dtype *src1){
                 auto gA = gIterA(row, k_base + k);
                 TLOAD(tA, gA);
                 if (k == 0) TMATMUL(tACC, tA, tB[k]);
-                else        TMATMUL_ACC(tACC, tA, tB[k]);
+                else        TMATMUL_ACC(tACC, tACC, tA, tB[k]);
               }
               tile_C_out_trows tACC_vec;
-              TCVT(tACC_vec, tACC);
               TADD(tC_rcol[row], tC_rcol[row], tACC_vec);
             }
 
@@ -2023,10 +1988,9 @@ void matmul_mask_reuseB_OPT2(float *dst, dtype *src0, dtype *src1){
                 auto gA = gIterA(Mb, k_base + k);
                 TLOAD(tA, gA);
                 if (k == 0) TMATMUL(tACC, tA, tB[k]);
-                else        TMATMUL_ACC(tACC, tA, tB[k]);
+                else        TMATMUL_ACC(tACC, tACC, tA, tB[k]);
               }
               tile_C_out_tcorner tACC_vec;
-              TCVT(tACC_vec, tACC);
               TADD(tC_corner, tC_corner, tACC_vec);
             }
           }
@@ -2061,13 +2025,11 @@ void matmul_mask_reuseB_OPT2(float *dst, dtype *src0, dtype *src1){
             auto gA = gIterA(row, k_base + k);
             TLOAD(tA, gA);
             if (k == 0) TMATMUL(tACC, tA, tB[k]);
-            else        TMATMUL_ACC(tACC, tA, tB[k]);
+            else        TMATMUL_ACC(tACC, tACC, tA, tB[k]);
           }
           if constexpr (is_first) {
-            TCVT(tC_main[row][col], tACC);
           } else {
             tile_C_out tACC_vec;
-            TCVT(tACC_vec, tACC);
             TADD(tC_main[row][col], tC_main[row][col], tACC_vec);
           }
         }
@@ -2080,13 +2042,11 @@ void matmul_mask_reuseB_OPT2(float *dst, dtype *src0, dtype *src1){
             auto gA = gIterA(Mb, k_base + k);
             TLOAD(tA, gA);
             if (k == 0) TMATMUL(tACC, tA, tB[k]);
-            else        TMATMUL_ACC(tACC, tA, tB[k]);
+            else        TMATMUL_ACC(tACC, tACC, tA, tB[k]);
           }
           if constexpr (is_first) {
-            TCVT(tC_rrow[col], tACC);
           } else {
             tile_C_out_tcols tACC_vec;
-            TCVT(tACC_vec, tACC);
             TADD(tC_rrow[col], tC_rrow[col], tACC_vec);
           }
         }
@@ -2109,13 +2069,11 @@ void matmul_mask_reuseB_OPT2(float *dst, dtype *src0, dtype *src1){
             auto gA = gIterA(row, k_base + k);
             TLOAD(tA, gA);
             if (k == 0) TMATMUL(tACC, tA, tB[k]);
-            else        TMATMUL_ACC(tACC, tA, tB[k]);
+            else        TMATMUL_ACC(tACC, tACC, tA, tB[k]);
           }
           if constexpr (is_first) {
-            TCVT(tC_rcol[row], tACC);
           } else {
             tile_C_out_trows tACC_vec;
-            TCVT(tACC_vec, tACC);
             TADD(tC_rcol[row], tC_rcol[row], tACC_vec);
           }
         }
@@ -2128,13 +2086,11 @@ void matmul_mask_reuseB_OPT2(float *dst, dtype *src0, dtype *src1){
             auto gA = gIterA(Mb, k_base + k);
             TLOAD(tA, gA);
             if (k == 0) TMATMUL(tACC, tA, tB[k]);
-            else        TMATMUL_ACC(tACC, tA, tB[k]);
+            else        TMATMUL_ACC(tACC, tACC, tA, tB[k]);
           }
           if constexpr (is_first) {
-            TCVT(tC_corner, tACC);
           } else {
             tile_C_out_tcorner tACC_vec;
-            TCVT(tACC_vec, tACC);
             TADD(tC_corner, tC_corner, tACC_vec);
           }
         }
@@ -2163,10 +2119,8 @@ void matmul_mask_reuseB_OPT2(float *dst, dtype *src0, dtype *src1){
           TMATMUL(tACC, tA, tB_rmdK);
 
           if constexpr (is_first) {
-            TCVT(tC_main[row][col], tACC);
           } else {
             tile_C_out tACC_vec;
-            TCVT(tACC_vec, tACC);
             TADD(tC_main[row][col], tC_main[row][col], tACC_vec);
           }
         }
@@ -2179,10 +2133,8 @@ void matmul_mask_reuseB_OPT2(float *dst, dtype *src0, dtype *src1){
           TMATMUL(tACC, tA, tB_rmdK);
 
           if constexpr (is_first) {
-            TCVT(tC_rrow[col], tACC);
           } else {
             tile_C_out_tcols tACC_vec;
-            TCVT(tACC_vec, tACC);
             TADD(tC_rrow[col], tC_rrow[col], tACC_vec);
           }
         }
@@ -2202,10 +2154,8 @@ void matmul_mask_reuseB_OPT2(float *dst, dtype *src0, dtype *src1){
           TMATMUL(tACC, tA, tB_rmdK);
 
           if constexpr (is_first) {
-            TCVT(tC_rcol[row], tACC);
           } else {
             tile_C_out_trows tACC_vec;
-            TCVT(tACC_vec, tACC);
             TADD(tC_rcol[row], tC_rcol[row], tACC_vec);
           }
         }
@@ -2218,10 +2168,8 @@ void matmul_mask_reuseB_OPT2(float *dst, dtype *src0, dtype *src1){
           TMATMUL(tACC, tA, tB_rmdK);
 
           if constexpr (is_first) {
-            TCVT(tC_corner, tACC);
           } else {
             tile_C_out_tcorner tACC_vec;
-            TCVT(tACC_vec, tACC);
             TADD(tC_corner, tC_corner, tACC_vec);
           }
         }
@@ -2351,7 +2299,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
             if(k==0){
               TMATMUL(tACC, tA, tB[k][ii]);
             }else{
-              TMATMUL_ACC(tACC, tA, tB[k][ii]);
+              TMATMUL_ACC(tACC, tACC, tA, tB[k][ii]);
             }
           }
 
@@ -2365,7 +2313,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
 
               TLOAD(tA,gA);
               TLOAD(tB,gB);
-              TMATMUL_ACC(tACC, tA, tB);
+              TMATMUL_ACC(tACC, tACC, tA, tB);
             }
           }
 
@@ -2380,7 +2328,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
             TLOAD(tA, gA);
             TLOAD(tB, gB);
             if constexpr(Kb>0){
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
             } else {
               TMATMUL(tACC, tA, tB);
             }
@@ -2402,7 +2350,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
             if(k==0){
               TMATMUL(tACC, tA, tB[k][ii]);
             }else{
-              TMATMUL_ACC(tACC, tA, tB[k][ii]);
+              TMATMUL_ACC(tACC, tACC, tA, tB[k][ii]);
             }
           }
 
@@ -2416,7 +2364,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
 
               TLOAD(tA,gA);
               TLOAD(tB,gB);
-              TMATMUL_ACC(tACC, tA, tB);
+              TMATMUL_ACC(tACC, tACC, tA, tB);
             }
           }
 
@@ -2431,7 +2379,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
             TLOAD(tA, gA);
             TLOAD(tB, gB);
             if constexpr(Kb>0){
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
             } else {
               TMATMUL(tACC, tA, tB);
             }
@@ -2470,7 +2418,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
             if(k==0){
               TMATMUL(tACC, tA, tB[k][i]);
             }else{
-              TMATMUL_ACC(tACC, tA, tB[k][i]);
+              TMATMUL_ACC(tACC, tACC, tA, tB[k][i]);
             }
           }
 
@@ -2487,7 +2435,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
               if constexpr (R.k == 0) {
                 TMATMUL(tACC, tA, tB);
               } else
-                TMATMUL_ACC(tACC, tA, tB);
+                TMATMUL_ACC(tACC, tACC, tA, tB);
             }
           }
 
@@ -2502,7 +2450,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
             TLOAD(tA, gA);
             TLOAD(tB, gB);
             if constexpr(Kb>0){
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
             } else {
               TMATMUL(tACC, tA, tB);
             }
@@ -2523,7 +2471,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
             if(k==0){
               TMATMUL(tACC, tA, tB[k][i]);
             }else{
-              TMATMUL_ACC(tACC, tA, tB[k][i]);
+              TMATMUL_ACC(tACC, tACC, tA, tB[k][i]);
             }
           }
 
@@ -2539,7 +2487,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
               if constexpr (R.k == 0)
                 TMATMUL(tACC, tA, tB);
               else
-                TMATMUL_ACC(tACC, tA, tB);
+                TMATMUL_ACC(tACC, tACC, tA, tB);
             }
           }
 
@@ -2554,7 +2502,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
             TLOAD(tA, gA);
             TLOAD(tB, gB);
             if constexpr(Kb>0){
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
             } else {
               TMATMUL(tACC, tA, tB);
             }
@@ -2587,7 +2535,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
           if(k==0){
             TMATMUL(tACC, tA, tB[k]);
           }else{
-            TMATMUL_ACC(tACC, tA, tB[k]);
+            TMATMUL_ACC(tACC, tACC, tA, tB[k]);
           }
         }
 
@@ -2603,7 +2551,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
             if constexpr (R.k == 0)
               TMATMUL(tACC, tA, tB);
             else
-              TMATMUL_ACC(tACC, tA, tB);
+              TMATMUL_ACC(tACC, tACC, tA, tB);
           }
         }
 
@@ -2618,7 +2566,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
           TLOAD(tA, gA);
           TLOAD(tB, gB);
           if constexpr(Kb>0){
-          TMATMUL_ACC(tACC, tA, tB);
+          TMATMUL_ACC(tACC, tACC, tA, tB);
           } else {
             TMATMUL(tACC, tA, tB);
           }
@@ -2639,7 +2587,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
           if(k==0){
             TMATMUL(tACC, tA, tB[k]);
           }else{
-            TMATMUL_ACC(tACC, tA, tB[k]);
+            TMATMUL_ACC(tACC, tACC, tA, tB[k]);
           }
         }
 
@@ -2655,7 +2603,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
             if constexpr (R.k == 0)
               TMATMUL(tACC, tA, tB);
             else
-              TMATMUL_ACC(tACC, tA, tB);
+              TMATMUL_ACC(tACC, tACC, tA, tB);
           }
         }
 
@@ -2670,7 +2618,7 @@ void matmul_mask_reuseB(float *dst, dtype *src0, dtype *src1){
           TLOAD(tA, gA);
           TLOAD(tB, gB);
           if constexpr(Kb>0){
-          TMATMUL_ACC(tACC, tA, tB);
+          TMATMUL_ACC(tACC, tACC, tA, tB);
           } else {
             TMATMUL(tACC, tA, tB);
           }
@@ -2787,7 +2735,7 @@ void matmul_mask_reuseAB(float *dst, dtype *src0, dtype *src1){
               if(k==0){
                 TMATMUL(tACC, tA[ii][k], tB[k][jj]);
               }else{
-                TMATMUL_ACC(tACC, tA[ii][k], tB[k][jj]);
+                TMATMUL_ACC(tACC, tACC, tA[ii][k], tB[k][jj]);
               }
             }
 
@@ -2799,7 +2747,7 @@ void matmul_mask_reuseAB(float *dst, dtype *src0, dtype *src1){
                 auto gB = gIterB(k,j*R.n+jj);
                 TLOAD(tA,gA);
                 TLOAD(tB,gB);
-                TMATMUL_ACC(tACC, tA, tB);
+                TMATMUL_ACC(tACC, tACC, tA, tB);
               }
             }
             auto gC = gIterC(i*R.m+ii,j*R.n+jj);
@@ -2831,7 +2779,7 @@ void matmul_mask_reuseAB(float *dst, dtype *src0, dtype *src1){
               if(k==0){
                 TMATMUL(tACC, tA[ii][k], tB[k][jj]);
               }else{
-                TMATMUL_ACC(tACC, tA[ii][k], tB[k][jj]);
+                TMATMUL_ACC(tACC, tACC, tA[ii][k], tB[k][jj]);
               }
             }
 
@@ -2843,7 +2791,7 @@ void matmul_mask_reuseAB(float *dst, dtype *src0, dtype *src1){
                 auto gB = gIterB(k,dN*R.n+jj);
                 TLOAD(tA,gA);
                 TLOAD(tB,gB);
-                TMATMUL_ACC(tACC, tA, tB);
+                TMATMUL_ACC(tACC, tACC, tA, tB);
               }
             }
             auto gC = gIterC(i*R.m+ii,dN*R.n+jj);
@@ -2888,7 +2836,7 @@ void matmul_mask_reuseAB(float *dst, dtype *src0, dtype *src1){
               if(k==0){
                 TMATMUL(tACC, tA[ii][k], tB[k][jj]);
               }else{
-                TMATMUL_ACC(tACC, tA[ii][k], tB[k][jj]);
+                TMATMUL_ACC(tACC, tACC, tA[ii][k], tB[k][jj]);
               }
             }
 
@@ -2900,7 +2848,7 @@ void matmul_mask_reuseAB(float *dst, dtype *src0, dtype *src1){
                 auto gB = gIterB(k,j*R.n+jj);
                 TLOAD(tA,gA);
                 TLOAD(tB,gB);
-                TMATMUL_ACC(tACC, tA, tB);
+                TMATMUL_ACC(tACC, tACC, tA, tB);
               }
             }
             auto gC = gIterC(dM*R.m+ii,j*R.n+jj);
@@ -2932,7 +2880,7 @@ void matmul_mask_reuseAB(float *dst, dtype *src0, dtype *src1){
               if(k==0){
                 TMATMUL(tACC, tA[ii][k], tB[k][jj]);
               }else{
-                TMATMUL_ACC(tACC, tA[ii][k], tB[k][jj]);
+                TMATMUL_ACC(tACC, tACC, tA[ii][k], tB[k][jj]);
               }
             }
 
@@ -2944,7 +2892,7 @@ void matmul_mask_reuseAB(float *dst, dtype *src0, dtype *src1){
                 auto gB = gIterB(k,dN*R.n+jj);
                 TLOAD(tA,gA);
                 TLOAD(tB,gB);
-                TMATMUL_ACC(tACC, tA, tB);
+                TMATMUL_ACC(tACC, tACC, tA, tB);
               }
             }
             auto gC = gIterC(dM*R.m+ii,dN*R.n+jj);
@@ -3007,7 +2955,7 @@ void matmul_mask_multi4_B(float *dst, dtype *src0, dtype *src1){
               if(k==0){
                 TMATMUL(tACC, tA, tB[k][jj]);
               }else{
-                TMATMUL_ACC(tACC, tA, tB[k][jj]);
+                TMATMUL_ACC(tACC, tACC, tA, tB[k][jj]);
               }
             }
             auto gC = gIterC(i,j+jj);
@@ -3078,11 +3026,11 @@ void matmul_mask_multi4_AB(float *dst, dtype *src0, dtype *src1){
             if(k==0){
               TMATMUL(tACC, tA[k], tB[k][jj]);
             }else{
-              TMATMUL_ACC(tACC, tA[k], tB[k][jj]);
+              TMATMUL_ACC(tACC, tACC, tA[k], tB[k][jj]);
             }
-            TMATMUL_ACC(tACC, tA[k+1], tB[k+1][jj]);
-            TMATMUL_ACC(tACC, tA[k+2], tB[k+2][jj]);
-            TMATMUL_ACC(tACC, tA[k+3], tB[k+3][jj]);
+            TMATMUL_ACC(tACC, tACC, tA[k+1], tB[k+1][jj]);
+            TMATMUL_ACC(tACC, tACC, tA[k+2], tB[k+2][jj]);
+            TMATMUL_ACC(tACC, tACC, tA[k+3], tB[k+3][jj]);
           }
           auto gC = gIterC(i,j);
           store_acc_tile(gC, tACC);
@@ -3125,7 +3073,7 @@ __attribute__((noinline)) void matmul_dynamic_new(float* dst, dtype* src0, dtype
                   if(k==0){
                     TMATMUL(tACC, tA, tB);
                   }else{
-                    TMATMUL_ACC(tACC, tA, tB);
+                    TMATMUL_ACC(tACC, tACC, tA, tB);
                   }
               }
               store_acc_tile_dynamic(gC, tACC, tACC.GetValidRow(), tACC.GetValidCol());
@@ -3173,7 +3121,7 @@ __attribute__((noinline)) void matmul_dynamic(float* dst, dtype* src0, dtype* sr
                   if(k==0){
                     TMATMUL(tACC, tA, tB);
                   }else{
-                    TMATMUL_ACC(tACC, tA, tB);
+                    TMATMUL_ACC(tACC, tACC, tA, tB);
                   }
               }
               store_acc_tile_dynamic(gC, tACC, tACC.GetValidRow(), tACC.GetValidCol());
@@ -3271,7 +3219,7 @@ __attribute__((noinline)) void matmul_dynamic_reuseA(float* dst, dtype* src0, dt
               if(k==0){
                 TMATMUL(tACC, tA[ii][k], tB);
               }else{
-                TMATMUL_ACC(tACC, tA[ii][k], tB);
+                TMATMUL_ACC(tACC, tACC, tA[ii][k], tB);
               }
             }
 
@@ -3291,7 +3239,7 @@ __attribute__((noinline)) void matmul_dynamic_reuseA(float* dst, dtype* src0, dt
                 if(k==0){
                   TMATMUL(tACC, tA, tB);
                 }else{
-                  TMATMUL_ACC(tACC, tA, tB);
+                  TMATMUL_ACC(tACC, tACC, tA, tB);
                 }
               }
             }
@@ -3381,7 +3329,7 @@ __attribute__((noinline)) void matmul_dynamic_reuseB(float* dst, dtype* src0, dt
               if(k==0){
                 TMATMUL(tACC, tA, tB[k][ii]);
               }else{
-                TMATMUL_ACC(tACC, tA, tB[k][ii]);
+                TMATMUL_ACC(tACC, tACC, tA, tB[k][ii]);
               }
             }
 
@@ -3401,7 +3349,7 @@ __attribute__((noinline)) void matmul_dynamic_reuseB(float* dst, dtype* src0, dt
                 if(k==0){
                   TMATMUL(tACC, tA, tB);
                 }else{
-                  TMATMUL_ACC(tACC, tA, tB);
+                  TMATMUL_ACC(tACC, tACC, tA, tB);
                 }
               }
             }
@@ -3557,7 +3505,7 @@ void matmul_mask_2lvl(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
           tile_shapeB tB;
           TLOAD(tA, gA);
           TLOAD(tB, gB);
-          TMATMUL_ACC(tACC, tA, tB);
+          TMATMUL_ACC(tACC, tACC, tA, tB);
         }
 
         if constexpr (rmd_K) {
@@ -3569,7 +3517,7 @@ void matmul_mask_2lvl(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
           TLOAD(tA, gA);
           TLOAD(tB, gB);
           if constexpr(Kb>0){
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
           } else {
             TMATMUL(tACC, tA, tB);
           }
@@ -3599,7 +3547,7 @@ void matmul_mask_2lvl(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
           tile_shapeB_trows tB;
           TLOAD(tA, gA);
           TLOAD(tB, gB);
-          TMATMUL_ACC(tACC, tA, tB);
+          TMATMUL_ACC(tACC, tACC, tA, tB);
         }
         if constexpr (rmd_K) {
           auto gA = gAIter(i, Kb);
@@ -3610,7 +3558,7 @@ void matmul_mask_2lvl(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
           TLOAD(tA, gA);
           TLOAD(tB, gB);
           if constexpr(Kb>0){
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
           } else {
             TMATMUL(tACC, tA, tB);
           }
@@ -3642,7 +3590,7 @@ void matmul_mask_2lvl(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
           tile_shapeB tB;
           TLOAD(tA, gA);
           TLOAD(tB, gB);
-          TMATMUL_ACC(tACC, tA, tB);
+          TMATMUL_ACC(tACC, tACC, tA, tB);
         }
         if constexpr (rmd_K) {
           auto gA = gAIter(Mb, Kb);
@@ -3653,7 +3601,7 @@ void matmul_mask_2lvl(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
           TLOAD(tA, gA);
           TLOAD(tB, gB);
           if constexpr(Kb>0){
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
           } else {
             TMATMUL(tACC, tA, tB);
           }
@@ -3683,7 +3631,7 @@ void matmul_mask_2lvl(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
           tile_shapeB_trows tB;
           TLOAD(tA, gA);
           TLOAD(tB, gB);
-          TMATMUL_ACC(tACC, tA, tB);
+          TMATMUL_ACC(tACC, tACC, tA, tB);
         }
         if constexpr (rmd_K) {
           auto gA = gAIter(Mb, Kb);
@@ -3694,7 +3642,7 @@ void matmul_mask_2lvl(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
           TLOAD(tA, gA);
           TLOAD(tB, gB);
           if constexpr(Kb>0){
-            TMATMUL_ACC(tACC, tA, tB);
+            TMATMUL_ACC(tACC, tACC, tA, tB);
           } else {
             TMATMUL(tACC, tA, tB);
           }
@@ -3737,7 +3685,7 @@ void matmul_vec(float* dst, float* src0, float* src1){
                 tile_shapeB tB;
                 TLOAD(tA, gA);
                 TLOAD(tB, gB);
-                TMATMUL_ACC(tACC, tA, tB);
+                TMATMUL_ACC(tACC, tACC, tA, tB);
             }
             TSTORE(gC, tACC);
         }

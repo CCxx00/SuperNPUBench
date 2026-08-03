@@ -29,12 +29,14 @@
 
 using namespace pto;
 
+template <typename E_, int R_, int C_, int VR_=R_, int VC_=C_>
+using TileAcc = Tile<Location::Vec, E_, R_, C_, BLayout::RowMajor, VR_, VC_>;
+
 // TODO, move to utils.cpp
 template <is_global_data_v GmOut, is_tile_data_v TileAcc>
 void store_acc_tile(GmOut &Gout, TileAcc &tAcc){
     using TileAccOut = Tile<Location::Vec, typename TileAcc::DType, TileAcc::Rows, TileAcc::Cols, BLayout::RowMajor, TileAcc::ValidRow, TileAcc::ValidCol>;
     TileAccOut tAccOut;
-    TCVT(tAccOut, tAcc);
     TSTORE(Gout, tAccOut);
 }
 
@@ -1370,7 +1372,6 @@ void matmul_mp(float *acc_ptr, dtypeA *a_ptr, dtypeB *b_ptr, float *c_ptr) {
         TLOAD(ts, gS); // [1, tN]
 
         TMATMUL(tACC, tA, tB);
-        TCVT(tACCin, tACC);//[tM, tN] 256->1 , 256 -> 2 scaling factor
         // static_assert(tile_shapeB::ValidCol % (width_factor*128) == 0); // TODO, 暂不考虑padding，假设形状是规整的, 方便处理, taccin*ts_adder=tc_dequant
         dequant_acc_pto(tC_dequant, tACCin, ts, tAdder[k%2]);
         tAdder[(k+1)%2] = tC_dequant;
@@ -1391,7 +1392,6 @@ void matmul_mp(float *acc_ptr, dtypeA *a_ptr, dtypeB *b_ptr, float *c_ptr) {
         TLOAD(ts, gS);
 
         TMATMUL(tACC, tA, tB);
-        TCVT(tACCin, tACC);
         dequant_acc_pto(tC_dequant, tACCin, ts, tAdder[k%2]);
         tAdder[(k+1)%2] = tC_dequant;
       }
@@ -1421,7 +1421,6 @@ void matmul_mp(float *acc_ptr, dtypeA *a_ptr, dtypeB *b_ptr, float *c_ptr) {
         TLOAD(tB, gB);
         TLOAD(ts, gS);
         TMATMUL(tACC, tA, tB);
-        TCVT(tACCin, tACC);
         dequant_acc_pto(tC_dequant, tACCin, ts, tAdder[k%2]);
         tAdder[(k+1)%2] = tC_dequant;
       }
@@ -1439,7 +1438,6 @@ void matmul_mp(float *acc_ptr, dtypeA *a_ptr, dtypeB *b_ptr, float *c_ptr) {
         TLOAD(tB, gB);
         TLOAD(ts, gS);
         TMATMUL(tACC, tA, tB);
-        TCVT(tACCin, tACC);
         dequant_acc_pto(tC_dequant, tACCin, ts, tAdder[k%2]);
         tAdder[(k+1)%2] = tC_dequant;
       }

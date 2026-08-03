@@ -45,9 +45,11 @@
 // =============================================================================
 
 #include <common/pto_tileop.hpp>
-#include "template_asm.h"   // 提供 *_TEPL 广播算子（绕过工具链 dtype 断言 bug）
 
 using namespace pto;
+
+template <typename E_, int R_, int C_, int VR_=R_, int VC_=C_>
+using TileAcc = Tile<Location::Vec, E_, R_, C_, BLayout::RowMajor, VR_, VC_>;
 
 template <typename dtype, int Sq, int Skv, int qD, int vD, int kTm, int kTk,
           int scaleD = qD>
@@ -63,7 +65,7 @@ void sparse_flash_attention_pto(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr,
     // tile 寄存器形状（与 fa_2d_unroll_pto / fa_hif4_pto 一致）。
     using tileQ      = TileLeft<dtype, kTm, (qD == 192 ? 256 : qD), kTm, qD>;
     using tileK      = TileRight<dtype, kTk, (qD == 192 ? 256 : qD), kTk, qD>;
-    using tileW_out  = TileAcc<float, kTm, kTk>;
+    using tW_type  = TileAcc<float, kTm, kTk>;
     using tileW      = Tile<Location::Vec, float, kTm, kTk, BLayout::ColMajor>;
     using tileW_cast = Tile<Location::Vec, dtype, kTm, kTk, BLayout::ColMajor>;
     using tileW_left = TileLeft<dtype, kTm, kTk>;
@@ -112,10 +114,8 @@ void sparse_flash_attention_pto(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr,
             auto gK = gIterK(j, 0);
             TLOAD(tK, gK);
 
-            tileW_out tW_out;
-            tileW     tW;
-            TMATMUL(tW_out, tQ, tK);
-            ACCCVT(tW, tW_out);
+            tileW tW;
+            TMATMUL(tW, tQ, tK);
             TMULS(tW, tW, scale);
 
             // m_new = max(m_old, colmax(score))
@@ -132,7 +132,7 @@ void sparse_flash_attention_pto(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr,
             TMUL(tScaledOldSum, tSum, tScale);
 
             // local_sum = colsum(exp(score - m_new))
-            TCOLEXPANDSUB_TEPL(tW, tW, tNewMax);
+            TCOLEXPANDSUB(tW, tW, tNewMax);
             TEXP(tW, tW);
             tileSum tLocalSum;
             TCOLSUM(tLocalSum, tW);
@@ -167,16 +167,14 @@ void sparse_flash_attention_pto(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr,
             auto gK = gIterK(j, 0);
             TLOAD(tK, gK);
 
-            tileW_out tW_out;
-            tileW     tW;
-            TMATMUL(tW_out, tQ2, tK);
-            ACCCVT(tW, tW_out);
+            tileW tW;
+            TMATMUL(tW, tQ2, tK);
             TMULS(tW, tW, scale);
 
             // p = exp(score - m) / l   （column-broadcast 减 + exp + 归一化乘）
-            TCOLEXPANDSUB_TEPL(tW, tW, tMax);
+            TCOLEXPANDSUB(tW, tW, tMax);
             TEXP(tW, tW);
-            TCOLEXPANDMUL_TEPL(tW, tW, tInvSum);
+            TCOLEXPANDMUL(tW, tW, tInvSum);
 
             // cast p -> dtype Left（TMATMUL 左操作数）
             tileW_cast tExpW;
@@ -189,10 +187,8 @@ void sparse_flash_attention_pto(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr,
             TLOAD(tV, gV);
 
             // PV = p * V （fresh TMATMUL；p 已归一化，O = Σ PV）
-            tileO_out tPV_out;
-            TMATMUL(tPV_out, tW_left, tV);
             tileO tPV;
-            ACCCVT(tPV, tPV_out);
+            TMATMUL(tPV, tW_left, tV);
 
             TADD(tO, tO, tPV);
         }
