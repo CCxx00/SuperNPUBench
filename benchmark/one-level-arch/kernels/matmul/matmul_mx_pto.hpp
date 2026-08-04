@@ -1302,7 +1302,10 @@ void matmul_mp(float *acc_ptr, dtypeA *a_ptr, dtypeB *b_ptr, float *c_ptr) {
   using gm_shapeACC = global_tensor<float, RowMajor<gM, gN>>;
   using tile_shapeA = TileLeft<dtypeA, trow, tK, tM, tK>;
   using tile_shapeB = TileRight<dtypeB, tK/width_factor, tcol, tK/width_factor, tcol>;
-  using tile_shape_scale = Tile<Location::Vec, float, tK/128, tcol, BLayout::RowMajor, tK/128, tN>;
+  // A scale block has only one logical row when tK=128. Pad the physical
+  // tile to 8 rows so TLOAD reaches the ISA minimum active size of 512 B.
+  using tile_shape_scale =
+      Tile<Location::Vec, float, 8, tcol, BLayout::RowMajor, tK/128, tN>;
   using tile_shape_dequant = Tile<Location::Vec, float, trow, tcol, BLayout::RowMajor, tM, tN>;
   using tile_shapeACC = TileAcc<float, trow, tcol, tM, tN>;
   // copy of acc, input as vector
@@ -1338,9 +1341,15 @@ void matmul_mp(float *acc_ptr, dtypeA *a_ptr, dtypeB *b_ptr, float *c_ptr) {
   using tile_shapeC_tcols = TileAcc<float, trow, tcol, rmd_M, tN>;
   using tile_shapeC_tcorner = TileAcc<float, trow, tcol, rmd_M, rmd_N>;
 
-  using tile_shape_scale_trows = Tile<Location::Scaling, float, tK/128, tcol, BLayout::RowMajor, tK/128, rmd_N, SLayout::NoneBox>;
-  using tile_shape_scale_tcols = Tile<Location::Scaling, float, tK/128, tcol, BLayout::RowMajor, rmd_K/128, tN, SLayout::NoneBox>;
-  using tile_shape_scale_tcorner = Tile<Location::Scaling, float, tK/128, tcol, BLayout::RowMajor, rmd_K/128, rmd_N, SLayout::NoneBox>;
+  using tile_shape_scale_trows =
+      Tile<Location::Vec, float, 8, tcol, BLayout::RowMajor,
+           tK/128, rmd_N>;
+  using tile_shape_scale_tcols =
+      Tile<Location::Vec, float, 8, tcol, BLayout::RowMajor,
+           rmd_K/128, tN>;
+  using tile_shape_scale_tcorner =
+      Tile<Location::Vec, float, 8, tcol, BLayout::RowMajor,
+           rmd_K/128, rmd_N>;
 
   using tile_ACCin_trows = Tile<Location::Vec, float, trow, tcol, BLayout::RowMajor, tM, rmd_N>;
   using tile_ACCin_tcols = Tile<Location::Vec, float, trow, tcol, BLayout::RowMajor, rmd_M, tN>;

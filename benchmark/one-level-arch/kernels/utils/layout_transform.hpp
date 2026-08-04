@@ -115,4 +115,5 @@ void gen_ND2NN_offset_Impl(
     // gen_offset_ND2NN<tile_shapeOffset><<<tl_tensor::ValidCol, tl_tensor::ValidRow, 1>>>(offset.data(), glb_tensor::ColStride, glb_tensor::RowStride, tl_tensor::ValidRow, tl_tensor::ValidCol, i, j);
     // gen_offset_ND2NN<tile_shapeOffset><<<tl_tensor::ValidRow, tl_tensor::ValidCol, 1>>>(offset.data(), glb_tensor::ColStride, glb_tensor::RowStride, tl_tensor::ValidRow, tl_tensor::ValidCol, i, j);
     gen_offset_ND2NN_new<tile_shapeOffset><<<tl_tensor::ValidRow, 1, 1>>>(offset.data(), glb_tensor::ColStride, glb_tensor::RowStride, tl_tensor::ValidRow, tl_tensor::ValidCol, i, j);
-}#endif // __linx
+}
+#endif // __linx

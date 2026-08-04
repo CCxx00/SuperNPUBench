@@ -160,9 +160,7 @@ void flash_attention_2d_unroll_pto(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr, d
             for(int x=0;x<Xdim;x++){
                 #pragma clang loop unroll(full)
                 for(int y=0;y<Ydim;y++){
-                    tileW_out tW[x][y];
                     TMATMUL(tW[x][y], tQ[x], tK[y]);
-                    // Acc/NZ -> Vec ColMajor
                     TMULS(tW[x][y], tW[x][y], scale);
                 }
             }
@@ -286,7 +284,6 @@ void flash_attention_2d_unroll_pto(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr, d
             tileW_left tW_left[Xdim][Ydim];
             #pragma clang loop unroll(full)
             for(int x=0;x<Xdim;x++){
-                tileO_out tPV[x];
                 #pragma clang loop unroll(full)
                 for(int y=0;y<Ydim;y++){
                     TCVT(tW_left[x][y], tExpW[x][y]);

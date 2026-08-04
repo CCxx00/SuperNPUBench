@@ -39,7 +39,7 @@ void pto_flash_softmax_block(CastTile &src_exp, MaxTile &new_max, SumTile &new_s
 
 template <typename OutTile, typename OldTile, typename PvTile, typename ScaleTile>
 void pto_online_update(OutTile &out, OldTile &old_out, PvTile &pv, ScaleTile &scale) {
-    TCOLEXPANDMUL(out, old_out, scale);
+    TROWEXPANDMUL(out, old_out, scale);
     TADD(out, out, pv);
 }
 
@@ -47,7 +47,7 @@ template <typename OutTile, typename SumTile>
 void pto_normalize_by_sum(OutTile &out, SumTile &sum) {
     SumTile inv_sum;
     TRECIP(inv_sum, sum);
-    TCOLEXPANDMUL(out, out, inv_sum);
+    TROWEXPANDMUL(out, out, inv_sum);
 }
 
 template <typename QuantTile, typename SrcTile>
@@ -61,6 +61,7 @@ void flash_attention_2d_unroll_hif4(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr,
                                     dtype* v_ptr, uint8_t* scale_q,
                                     uint8_t* scale_k, uint8_t* scale_v) {
     static_assert(qD == vD);
+    static constexpr int physicalTm = kTm < 16 ? 16 : kTm;
 
     using gmQ = global_tensor<dtype, RowMajor<Sq, qD / 2>>;
     using gmK = global_tensor<dtype, ColMajor<qD / 2, Skv>>;
@@ -71,12 +72,15 @@ void flash_attention_2d_unroll_hif4(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr,
     using gmKScale = global_tensor<uint8_t, ColMajor<qD / w_factor, Skv>>;
     using gmVScale = global_tensor<uint8_t, RowMajor<Skv, vD / w_factor>>;
 
-    using tileQ = TileLeft<dtype, kTm, (qD == 192 ? 256 : qD) / 2, kTm, qD / 2>;
+    using tileQ =
+        TileLeft<dtype, physicalTm, (qD == 192 ? 256 : qD) / 2,
+                 kTm, qD / 2>;
     using tileK = TileRight<dtype, (qD == 192 ? 256 : qD) / 2, kTk, qD / 2, kTk>;
     using tileV = TileRight<dtype, kTk, vD>;
 
-    using tileQScale = Tile<Location::Scaling, uint8_t, kTm, qD, BLayout::RowMajor,
-                            kTm, qD / w_factor, SLayout::NoneBox>;
+    using tileQScale =
+        Tile<Location::Scaling, uint8_t, physicalTm, qD, BLayout::RowMajor,
+             kTm, qD / w_factor, SLayout::NoneBox>;
     using tileKScale = Tile<Location::Scaling, uint8_t, qD, kTk, BLayout::ColMajor,
                             qD / w_factor, kTk, SLayout::NoneBox>;
     using tileVScale = Tile<Location::Scaling, uint8_t, kTk, vD, BLayout::RowMajor,
@@ -84,7 +88,9 @@ void flash_attention_2d_unroll_hif4(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr,
 
     using tileWAcc = TileAcc<float, kTm, kTk>;
     using tileW = Tile<Location::Vec, float, kTm, kTk, BLayout::ColMajor>;
-    using tileWCast = Tile<Location::Vec, casttype, kTm, kTk, BLayout::ColMajor>;
+    using tileWCast =
+        Tile<Location::Vec, casttype, physicalTm, kTk, BLayout::ColMajor,
+             kTm, kTk>;
     using tilePHif4 = Tile<Location::Vec, __fp4_e1m2x2, 32, kTk / 2,
                            BLayout::ColMajor, kTm, kTk / 2, SLayout::ColMajor>;
     using tilePLeft = TileLeft<dtype, 32, kTk, kTm, kTk>;
@@ -164,7 +170,6 @@ void flash_attention_2d_unroll_hif4(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr,
             for (int x = 0; x < Xdim; ++x) {
                 #pragma clang loop unroll(full)
                 for (int y = 0; y < Ydim; ++y) {
-                    tileWAcc tW[x][y];
                     TMATMUL_MX(tW[x][y], tQ[x], tQScale[x], tK[y], tKScale[y]);
                 }
             }
@@ -180,7 +185,7 @@ void flash_attention_2d_unroll_hif4(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr,
 
                 #pragma clang loop unroll(full)
                 for (int y = 0; y < Ydim; ++y) {
-                    TCOLMAX(tLocalMax[y], tW[x][y]);
+                    TROWMAX(tLocalMax[y], tW[x][y]);
                 }
 
 #if Ydim == 1
@@ -211,9 +216,9 @@ void flash_attention_2d_unroll_hif4(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr,
                 tileSum tLocalSum[Ydim];
                 #pragma clang loop unroll(full)
                 for (int y = 0; y < Ydim; ++y) {
-                    TCOLEXPANDSUB(tW[x][y], tW[x][y], tNewMax[x]);
+                    TROWEXPANDSUB(tW[x][y], tW[x][y], tNewMax[x]);
                     TEXP(tW[x][y], tW[x][y]);
-                    TCOLSUM(tLocalSum[y], tW[x][y]);
+                    TROWSUM(tLocalSum[y], tW[x][y]);
                     TCVT(tExpW[x][y], tW[x][y]);
                     pto_quantize_softmax_to_hif4(tP[x][y], tExpW[x][y]);
                 }
@@ -258,7 +263,7 @@ void flash_attention_2d_unroll_hif4(dtype* out_ptr, dtype* q_ptr, dtype* k_ptr,
                     tilePLeft tPLeft;
                     TCVT(tPLeft, tP[x][y]);
                     tileO tPVPart;
-                    TMATMUL_MX(tPV[x], tPLeft, tQScale[x], tV[y], tVScale[y]);
+                    TMATMUL_MX(tPVPart, tPLeft, tQScale[x], tV[y], tVScale[y]);
                     if (y == 0) {
                         tPVSum = tPVPart;
                     } else {
