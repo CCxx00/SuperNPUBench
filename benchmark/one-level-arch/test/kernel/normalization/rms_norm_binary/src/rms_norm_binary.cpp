@@ -31,12 +31,12 @@
 #ifndef POW_R
 #define POW_R 4096
 #endif
-#ifndef K_MAX_LEVELS
-#define K_MAX_LEVELS 6
-#endif
-// Must match rms_bin::kWsCols
+// Must match rms_bin::kWsCols / kMaxLevels
 #ifndef K_WS_COLS
 #define K_WS_COLS 128
+#endif
+#ifndef K_MAX_LEVELS
+#define K_MAX_LEVELS 6
 #endif
 
 int main() {
