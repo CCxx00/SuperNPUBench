@@ -323,10 +323,10 @@ bin/gfrun -f ../SuperNPUBench/benchmark/one-level-arch/output/kernel/matmul/elf/
 ```bash
 #!/bin/bash
 set -e
-WORKSPACE_ROOT=${WORKSPACE_ROOT:-$HOME/src}
-TC=$WORKSPACE_ROOT/linx-toolchain-build
-BENCH=$WORKSPACE_ROOT/SuperNPUBench
-SIM=$WORKSPACE_ROOT/SuperScalarModel
+GH=/Users/liyi/Documents/GitHub
+TC=$GH/linx-toolchain-build
+BENCH=$GH/SuperNPUBench
+SIM=$GH/SuperScalarModel
 export COMPILER_DIR=$TC/output/linx_blockisa_llvm_musl/bin
 OBJDUMP=$COMPILER_DIR/llvm-objdump
 
