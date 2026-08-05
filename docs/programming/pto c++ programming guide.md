@@ -1,6 +1,6 @@
 # PTO C++ Programming Guide
 
-> **Version**: 2026.07 | **ISA**: PTO-ISA BlockISA v0.55 | **Toolchain**: linx_blockisa_llvm_musl (clang-15)
+> **Version**: 2026.08 | **ISA**: PTO-ISA v0.57.1 | **Toolchain**: linx_blockisa_llvm_musl (clang-15)
 
 ## Table of Contents
 
@@ -29,7 +29,17 @@ template library that maps high-level tile operations (`TADD`, `TMATMUL`,
 `TLOAD`, etc.) to inline-assembly block instructions (`BSTART.TEPL`,
 `BSTART.TLSU`, `BSTART.CUBE`).
 
-### 1.2 Target Architecture
+### 1.2 PTO ISA v0.57.1 Operation Set
+
+The ISA defines exactly **120 operations**: 98 TEPL + 9 TMA + 13 CUBE.
+
+| Family | Count | Key Operations |
+|--------|-------|----------------|
+| **TMA** (memory) | 9 | `TLOAD`, `TSTORE`, `TMOV`, `TPREFETCH`, `MGATHER`, `MSCATTER`, `MGATHER_MASK`, `MSCATTER_MASK`, `MGATHER_CAS` |
+| **CUBE** (matrix) | 13 | `TMATMUL`, `TMATMUL_BIAS`, `TMATMUL_ACC`, `TMATMUL_MX` (+Bias/Acc variants), `ACCCVT`, `TGEMV` (+variants) |
+| **TEPL** (elementwise) | 98 | `TADD`, `TSUB`, `TMUL`, `TCMP`, `TSEL`, `TROWSUM`, `TCOLMAX`, `TEXPANDS`, `TCONCAT`, `TTRANS`, ... |
+
+### 1.3 Target Architecture
 
 The **DavinciOO v4 core** consists of 4 Processing Elements (PEs):
 
@@ -46,7 +56,22 @@ Each PE executes tile/block intrinsics as **thread-local** instructions — no
 implicit cross-PE register access. Global memory is reachable only through TLSU
 blocks (`TLOAD`, `TSTORE`, `MGATHER`, `MSCATTER`).
 
-### 1.3 Document Scope
+### 1.4 v5 Breaking Changes
+
+PTO ISA v0.57.1 introduces breaking changes from earlier versions:
+
+| Change | Old | New |
+|--------|-----|-----|
+| `Location::Acc` | Removed | Use `Location::Vec` for accumulator tiles |
+| `TileAcc` alias | `Tile<Location::Acc, ...>` | `Tile<Location::Vec, float, R, C, RowMajor>` |
+| `ACCCVT` | `ACCCVT(dst, acc)` export | Removed — `TMATMUL*` writes directly to output tile |
+| `TMATMUL_ACC` | 3-arg: `(c, a, b)` implicit ACC | 4-arg: `(d, c, a, b)` explicit D/C tiles |
+| `TCOPYIN`/`TCOPYOUT` | Tile-to-GM wrappers | Renamed to `TLOAD`/`TSTORE` |
+| `TCOPY` (tile copy) | `TCOPY(dst, src)` | Use `TCVT(dst, src)` (same-type = copy) |
+| `mask=` keyword in B.IOT | `B.IOT ..., mask=15, ...` | Mask is positional source operand via `B.IOT` |
+| `_FIXP` opcodes | `TMATMUL_ACC_FIXP` etc. | Unified via `B.FPATR` header |
+
+### 1.5 Document Scope
 
 This guide covers:
 - The C++ tile-programming API (`pto_tileop.hpp`)
@@ -54,7 +79,7 @@ This guide covers:
 - Compilation with the Linx toolchain
 
 For ISA-level encoding and hardware microarchitecture, see the DavinciOO ISA
-intrinsic documentation.
+intrinsic documentation and [Linx-TileOP-API tileop-usage](https://github.com/LinxISA/Linx-TileOP-API/tree/linx/docs/tileop-usage).
 
 ---
 
@@ -75,16 +100,21 @@ TADD(c, a, b);   // c[i][j] = a[i][j] + b[i][j]  for all 256 elements
 
 ```
 Global Memory (DRAM)
-    ↕  TLOAD / TSTORE / MGATHER / MSCATTER  (TLSU blocks)
+    ↕  TLOAD / TSTORE / MGATHER / MSCATTER / TMOV  (TLSU blocks)
 Tile Register Files (on-chip, per-PE)
-    ├── Location::Vec   — general-purpose elementwise tiles
-    ├── Location::Left  — GEMM A-operand tiles (boxed, 512B fractal)
-    ├── Location::Right — GEMM B-operand tiles (boxed, 512B fractal)
-    └── Location::Acc   — accumulator tiles (boxed, 1024B fractal, FP32)
+    ├── Location::Vec      — general-purpose elementwise tiles
+    ├── Location::Left     — GEMM A-operand tiles (boxed, 512B fractal)
+    ├── Location::Right    — GEMM B-operand tiles (boxed, 512B fractal)
+    ├── Location::Bias     — bias tiles
+    └── Location::Scaling  — scaling factor tiles
 ```
 
+> **v5 change**: `Location::Acc` is removed. Accumulator tiles are now regular
+> `Location::Vec` tiles. `TMATMUL*` writes directly to the output tile — no
+> separate `ACCCVT` export step needed.
+
 There is **no pointer** to tile registers. Data must be explicitly moved between
-global memory and tile registers via `TCOPYIN`/`TCOPYOUT` (or `TLOAD`/`TSTORE`).
+global memory and tile registers via `TLOAD`/`TSTORE`.
 
 ### 2.3 Tile Register Namespace
 
@@ -132,14 +162,32 @@ BSTOP                               ← block end
 ```
 
 Families:
-- **TEPL** — elementwise, tile-scalar, reduce, expand, compare, select
-- **TLSU** — TLOAD, TSTORE, MGATHER, MSCATTER (memory ↔ tile)
-- **CUBE** — TMATMUL, TGEMV, ACCCVT (matrix compute)
+- **TEPL** — elementwise, tile-scalar, reduce, expand, compare, select (98 ops)
+- **TLSU** — TLOAD, TSTORE, TMOV, MGATHER, MSCATTER (+mask, +CAS) (9 ops)
+- **CUBE** — TMATMUL, TGEMV, ACCCVT (13 ops)
 
 In C++, these are emitted automatically by the template intrinsics — the
 programmer never writes raw assembly.
 
-### 2.6 Data Types
+### 2.6 B.IOT Operand Binding
+
+`B.IOT` encodes at most **2 source TileRegs + 1 destination queue** per line.
+Multi-source intrinsics use multiple sequential `B.IOT`s; the last must set
+`last`.
+
+Source TileReg encoding (6-bit):
+
+| Encoding | Source |
+|----------|--------|
+| `0..15` | `T#1..T#16` |
+| `16..31` | `U#1..U#16` |
+| `32..47` | `M#1..M#16` |
+| `48..63` | `N#1..N#16` |
+
+> **v5 change**: Mask for `MGATHER_MASK`/`MSCATTER_MASK` is now a **positional
+> source operand** bound via `B.IOT` (not a `mask=` keyword).
+
+### 2.7 Data Types
 
 | Category | Types |
 |----------|-------|
@@ -165,13 +213,16 @@ using namespace pto;
 
 This transitively includes:
 1. `pto_tile.hpp` — Tile / GlobalTensor type system + concepts
-2. `tileop_api.hpp` — public API wrappers (MATMUL, TADD, TLOAD, ...)
+2. `tileop_api.hpp` — public API wrappers (TLOAD, TSTORE, TADD, ...)
 3. `global_iterator.hpp` — DRAM tile-stepping iterator
 4. `tile_tensor_impl.hpp` — out-of-line Tile constructors
-5. `debug_utils.hpp` — debug helpers
 
 Backend is selected by defining exactly one of: `__linx`, `__ARM_FEATURE_SME`,
 or `__cpu_sim__` at compile time.
+
+> Under `__linx`, the inline-asm operations are provided directly (no `_Impl`
+> wrappers). Some API wrappers (e.g. `TCOPY`) are only available under
+> non-`__linx` backends; use `TCVT` as a tile-to-tile copy alternative.
 
 ### 3.2 Tile Types
 
@@ -191,7 +242,7 @@ struct Tile;
 
 | Parameter | Meaning |
 |-----------|---------|
-| `Loc` | Pipeline stage: `Vec`, `Left`, `Right`, `Acc`, `Mat`, `Bias`, `Scaling` |
+| `Loc` | Pipeline stage: `Vec`, `Left`, `Right`, `Mat`, `Bias`, `Scaling`, `Shared` |
 | `DType` | Element type (`half`, `float`, `int32_t`, ...) |
 | `Rows`, `Cols` | Compile-time tile footprint |
 | `ValidRow`, `ValidCol` | Active (unpadded) extent; `-1` = runtime dynamic |
@@ -209,17 +260,17 @@ using TileLeft  = Tile<Location::Left,  E, R, C, BLayout::ColMajor, VR, VC, SLay
 // GEMM B-operand: RowMajor outer, ColMajor fractal, 512B block
 template <typename E, int R, int C, int VR = R, int VC = C>
 using TileRight = Tile<Location::Right, E, R, C, BLayout::RowMajor, VR, VC, SLayout::ColMajor, 512>;
-
-// GEMM accumulator: ColMajor outer, RowMajor fractal, 1024B block (FP32)
-template <typename E, int R, int C, int VR = R, int VC = C>
-using TileAcc   = Tile<Location::Acc, E, R, C, BLayout::ColMajor, VR, VC, SLayout::RowMajor, 1024>;
 ```
+
+> **v5 change**: `TileAcc` (was `Tile<Location::Acc, ...>`) is removed. Use
+> `Tile<Location::Vec, float, R, C, BLayout::RowMajor>` for accumulator tiles.
+> `TMATMUL*` writes directly to this tile — no separate ACC export needed.
 
 #### General-Purpose Tile (elementwise / reduction / load-store)
 
 ```cpp
-Tile<Location::Vec, half, 16, 16, BLayout::RowMajor> a;
-Tile<Location::Vec, float, 16, 16, BLayout::ColMajor> b;
+Tile<Vec, half, 16, 16, BLayout::RowMajor> a;
+Tile<Vec, float, 16, 16, BLayout::ColMajor> b;
 ```
 
 #### Constructors
@@ -229,18 +280,9 @@ TileLeft<half, 128, 128> a;                    // default (uninitialized)
 TileLeft<half, 128, 128> a(0.0_h);              // fill with scalar
 TileLeft<half, 128, 128, -1, -1> a(96, 64);    // dynamic valid extents
 TileLeft<half, 128, 128, -1, -1> a(0.0_h, 96, 64);  // fill + dynamic extents
-TileAcc<float, 128, 128, -1, -1> c(0.0f, 96, 64);   // accumulator fill + dynamic
 ```
 
 ### 3.3 Global Memory Types
-
-#### GlobalTensor
-
-```cpp
-template <typename DType, typename Shape, typename Stride,
-           Layout Layout_ = Layout::ND>
-struct GlobalTensor;
-```
 
 #### global_tensor (convenience wrapper)
 
@@ -262,38 +304,43 @@ for (int i = 0; i < 2; ++i)
     for (int j = 0; j < 2; ++j) {
         TileLeft<half, 128, 128> a;
         auto view = it(i, j);       // returns a GlobalTensor view of one 128×128 tile
-        TCOPYIN(a, view);           // load that tile
+        TLOAD(a, view);             // load that tile
     }
 ```
 
 ### 3.4 Tile Operations — C++ API Reference
 
-#### Memory Operations
+#### Memory Operations (TLSU family)
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `TCOPYIN` | `(tile& dst, gm& src)` | Load tile from global memory |
-| `TCOPYOUT` | `(gm& dst, tile& src)` | Store tile to global memory |
-| `TCOPY` | `(tile& dst, tile& src)` | Tile-to-tile copy |
+| `TLOAD` | `(tile& dst, gm& src)` | Load tile from global memory |
+| `TSTORE` | `(gm& dst, tile& src)` | Store tile to global memory |
+| `TCVT` | `(tile& dst, tile& src)` | Type/layout conversion (same-type = copy) |
 | `MGATHER` | `(tile& dst, gm& src, tile& offsets)` | Gather by per-element byte offsets |
 | `MSCATTER` | `(gm& dst, tile& src, tile& offsets)` | Scatter by per-element byte offsets |
 
-> `TLOAD`/`TSTORE` are aliases for `TCOPYIN`/`TCOPYOUT` in the PTO programming model.
+> **v5 changes**: `TCOPYIN`→`TLOAD`, `TCOPYOUT`→`TSTORE`. `TCOPY` (tile-to-tile
+> copy) is not available under `__linx`; use `TCVT` with same-type tiles. `TMOV`
+> (PTO ISA TMA Function 2) performs tile-to-tile move with layout transform.
+> `MGATHER_MASK`/`MSCATTER_MASK` bind mask as positional source (no `mask=` keyword).
 
-#### Matrix Operations
+#### Matrix Operations (CUBE family)
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `MATMUL` | `(C& dst, A& src0, B& src1)` | `dst = src0 × src1` |
-| `MATMACC` | `(C& dst, A& src0, B& src1)` | `dst += src0 × src1` (fused MAC) |
-| `MATMULMX` | `(C&, A&, AX&, B&, BX&)` | MX mixed-precision (A+B scaling) |
-| `MATMULMXB` | `(C&, A&, B&, BX&)` | MX mixed-precision (B-only scaling) |
-| `ACCCVT` | `(tile& dstVec, tile& srcAcc)` | Accumulator → Vec convert |
+| `TMATMUL` | `(C&, A&, B&)` | `C = A × B` (write-initialize) |
+| `TMATMUL_ACC` | `(D&, C&, A&, B&)` | `D = C + A × B` (read-write accumulate) |
+| `TMATMUL_BIAS` | `(C&, A&, B&, Bias&)` | `C = A × B + Bias` |
+| `TMATMUL_MX` | `(C&, A&, AX&, B&, BX&)` | MX mixed-precision (A+B scaling) |
+| `ACCCVT` | removed | TMATMUL* writes directly to output tile |
 
-`MATMUL` overwrites the accumulator; `MATMACC` accumulates into it. A and B
-must be `TileLeft`/`TileRight` (boxed fractal layout); C must be `TileAcc`.
+> **v5 changes**: ACC is no longer implicit. `TMATMUL_ACC` takes 4 explicit
+> arguments `(d, c, a, b)` where D=output, C=accumulator input. For in-place
+> accumulation: `TMATMUL_ACC(acc, acc, a, b)`. `_FIXP` variants replaced by
+> unified `B.FPATR` header.
 
-#### Elementwise Binary
+#### Elementwise Binary (TEPL family)
 
 | Function | Description |
 |----------|-------------|
@@ -307,21 +354,6 @@ must be `TileLeft`/`TileRight` (boxed fractal layout); C must be `TileAcc`.
 | `TOR(dst, a, b)` | Bitwise OR |
 | `TXOR(dst, a, b)` | Bitwise XOR |
 | `TCMP(dst, a, b)` | Compare (produces mask) |
-
-#### Elementwise Unary
-
-| Function | Description |
-|----------|-------------|
-| `TAbs(dst, src)` | Absolute value |
-| `TExp(dst, src)` | Exponential (e^x) |
-| `TLog(dst, src)` | Natural logarithm |
-| `TSqrt(dst, src)` | Square root |
-| `TRSqrt(dst, src)` | Reciprocal square root (1/√x) |
-| `TRecip(dst, src)` | Reciprocal (1/x) |
-| `TNeg(dst, src)` | Negation |
-| `TNot(dst, src)` | Bitwise NOT |
-| `TCvt(dst, src)` | Type/location conversion |
-| `TCast(dst, src)` | Bit-cast reshape (same numel) |
 
 #### Tile-Scalar Operations
 
@@ -340,7 +372,7 @@ must be `TileLeft`/`TileRight` (boxed fractal layout); C must be `TileAcc`.
 |----------|-------------|
 | `TEXPANDS(tile, scalar)` | Fill entire tile with scalar value |
 | `TCI(tile, scalar)` | Constant-inject ramp `[base, base+1, ...]` |
-| `TROWEXPANDMUL(dst, mat, vec)` | Row-broadcast multiply (each row × corresponding scalar) |
+| `TROWEXPANDMUL(dst, mat, vec)` | Row-broadcast multiply |
 | `TCOLEXPANDMUL(dst, mat, vec)` | Column-broadcast multiply |
 | `TROWEXPANDADD`, `TCOLEXPANDADD`, ... | Broadcast add/sub/div/max/min variants |
 
@@ -365,7 +397,6 @@ must be `TileLeft`/`TileRight` (boxed fractal layout); C must be `TileAcc`.
 | `TRESHAPE(dst, src)` | Reshape (same numel) |
 | `TEXTRACT(dst, src)` | Extract sub-tile |
 | `TINSERT(dst, src)` | Insert sub-tile |
-| `TFILLPAD(dst, src)` | Fill padding region |
 | `TCONCAT(dst, src0, src1)` | Concatenate two tiles |
 | `TSELECT(dst, mask, a, b)` | Select by mask |
 
@@ -376,9 +407,6 @@ template <typename T> concept is_tile_data_v;    // matches Tile<...>
 template <typename T> concept is_global_data_v;  // matches GlobalTensor / global_tensor
 template <typename T> concept is_boxed_data_v;   // boxed (fractal) tile
 ```
-
-These are used as C++20 template constraints on all API functions. The compiler
-will produce a clear error if you pass the wrong type.
 
 ---
 
@@ -406,43 +434,35 @@ using namespace pto;
 
 template <typename dtype, int gM, int gN, int gK, int tM, int tN, int tK>
 void matmul(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
-    // Global memory descriptors
     using gmA = global_tensor<dtype, RowMajor<gM, gK>>;
     using gmB = global_tensor<dtype, RowMajor<gK, gN>>;
     using gmC = global_tensor<float, RowMajor<gM, gN>>;
 
-    // Tile types
-    using TileA   = TileLeft<dtype, tM, tK>;
-    using TileB   = TileRight<dtype, tK, tN>;
-    using TileAcc = TileAcc<float, tM, tN>;
+    using TileA = TileLeft<dtype, tM, tK>;
+    using TileB = TileRight<dtype, tK, tN>;
+    // v5: accumulator is now a regular Vec tile (no TileAcc)
+    using TileC = Tile<Vec, float, tM, tN, BLayout::RowMajor>;
 
-    gmA gA(a_ptr);
-    gmB gB(b_ptr);
-    gmC gC(c_ptr);
-
+    gmA gA(a_ptr); gmB gB(b_ptr); gmC gC(c_ptr);
     global_iterator<gmA, TileA> itA(gA.data());
     global_iterator<gmB, TileB> itB(gB.data());
-    global_iterator<gmC, TileAcc> itC(gC.data());
+    global_iterator<gmC, TileC> itC(gC.data());
 
     constexpr int Mb = gM / tM, Nb = gN / tN, Kb = gK / tK;
 
     for (int i = 0; i < Mb; ++i) {
         for (int j = 0; j < Nb; ++j) {
-            TileAcc acc(0.0f);                    // zero-initialize accumulator
+            TileC acc(0.0f);                    // zero-initialize
             for (int k = 0; k < Kb; ++k) {
-                TileA tA;
-                TileB tB;
-                TCOPYIN(tA, itA(i, k));           // load A tile
-                TCOPYIN(tB, itB(k, j));           // load B tile
+                TileA tA;  TileB tB;
+                TLOAD(tA, itA(i, k));
+                TLOAD(tB, itB(k, j));
                 if (k == 0)
-                    MATMUL(acc, tA, tB);           // first: dst = A × B
+                    TMATMUL(acc, tA, tB);        // first: acc = A × B
                 else
-                    MATMACC(acc, tA, tB);          // subsequent: dst += A × B
+                    TMATMUL_ACC(acc, acc, tA, tB);  // v5: 4-arg, in-place accumulate
             }
-            // Convert Acc → Vec for store
-            Tile<Vec, float, tM, tN, BLayout::RowMajor> out;
-            ACCCVT(out, acc);
-            TCOPYOUT(itC(i, j), out);
+            TSTORE(itC(i, j), acc);              // v5: store directly (no ACCCVT)
         }
     }
 }
@@ -451,80 +471,46 @@ void matmul(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
 ### 4.3 Example: Elementwise + Reduction
 
 ```cpp
-// Column-wise reduce-sum of a matrix
 template <typename dtype, int gM, int gN, int tM, int tN>
 void reducesum(dtype *out_ptr, dtype *in_ptr) {
     using namespace pto;
-
     using gmIn  = global_tensor<dtype, RowMajor<gM, gN>>;
     using gmOut = global_tensor<dtype, RowMajor<1, gN>>;
-
     using TileData = Tile<Vec, dtype, tM, tN, BLayout::RowMajor>;
     using TileSum  = Tile<Vec, dtype, 1, tN, BLayout::RowMajor>;
 
-    gmIn gIn(in_ptr);
-    gmOut gOut(out_ptr);
-
+    gmIn gIn(in_ptr); gmOut gOut(out_ptr);
     global_iterator<gmIn, TileData> itIn(gIn.data());
     global_iterator<gmOut, TileSum> itOut(gOut.data());
 
     constexpr int Mb = gM / tM, Nb = gN / tN;
-
     for (int j = 0; j < Nb; ++j) {
         TileSum sum;
-        TEXPANDS(sum, static_cast<dtype>(0));     // fill with zero
-
+        TEXPANDS(sum, static_cast<dtype>(0));
         for (int i = 0; i < Mb; ++i) {
             TileData data;
-            TCOPYIN(data, itIn(i, j));
-
+            TLOAD(data, itIn(i, j));
             TileSum partial;
-            TCOLSUM(partial, data);                // column-wise sum
-            TADD(sum, sum, partial);               // accumulate
+            TCOLSUM(partial, data);
+            TADD(sum, sum, partial);
         }
-        TCOPYOUT(itOut(0, j), sum);
+        TSTORE(itOut(0, j), sum);
     }
 }
 ```
 
-### 4.4 Example: Quantization (absmax + scale)
+### 4.4 Example: Type Conversion (bf16 ↔ fp32)
 
 ```cpp
-// Per-token FP8 quantization: compute scale = max|x| / max_val, then x / scale
-template <int M, int Npc, int TileM = 16>
-void per_token_cast(__bf16 *x, int hidden, float *out_sf, __bf16 *out,
-                    float max_val, float clamp_min) {
-    using namespace pto;
-    using tile_x    = Tile<Vec, __bf16, TileM, Npc, BLayout::RowMajor>;
-    using tile_f    = Tile<Vec, float,   TileM, Npc, BLayout::RowMajor>;
-    using tile_amax = Tile<Vec, float, TileM, 8, BLayout::RowMajor, TileM, 1>;
+// TCVT performs type conversion; with same-type tiles it acts as a copy
+tile_x xq;       // Tile<Vec, __bf16, ...>
+tile_f xf;       // Tile<Vec, float, ...>
 
-    tile_x xq;
-    tile_f xf, neg, outf;
-    tile_amax pos, negm, amax, sf, sfinv, inv;
-
-    // 1) Load and convert bf16 → fp32
-    TCOPYIN(xq, /* global view */);
-    TCVT(xf, xq);
-
-    // 2) absmax = max(max(x), max(-x))   (TABS/TNEG unavailable → emulate)
-    TMULs(neg, xf, -1.0f);
-    TROWMAX(pos, xf);
-    TROWMAX(negm, neg);
-    TMAX(amax, pos, negm);
-
-    // 3) Clamp and compute scale
-    TMAXs(amax, amax, clamp_min);
-    TMULs(sf, amax, 1.0f / max_val);
-    TRECIP(inv, amax);
-    TMULs(sfinv, inv, max_val);
-
-    // 4) Scale and convert back
-    TROWEXPANDMUL(outf, xf, sfinv);
-    TCVT(xq, outf);
-    TSTORE(/* scale global */, sf);
-    TSTORE(/* data global */, xq);
-}
+TLOAD(xq, g_x);
+TCVT(xf, xq);                   // bf16 → fp32 (upcast for computation)
+// ... compute in fp32 ...
+TCVT(xq, outf);                 // fp32 → bf16 (downcast for storage)
+TSTORE(g_out, xq);
 ```
 
 ### 4.5 Tail / Boundary Handling
@@ -533,22 +519,14 @@ For dimensions not evenly divisible by tile size, use the `ValidRow`/`ValidCol`
 template parameters:
 
 ```cpp
-constexpr int rmd_M = gM % tM;  // remainder rows
-constexpr int rmd_N = gN % tN;  // remainder cols
+constexpr int rmd_M = gM % tM;
+constexpr int rmd_N = gN % tN;
 
-// Full tile (no remainder)
 using TileData     = Tile<Vec, dtype, tM, tN, BLayout::RowMajor>;
-
-// Row-tail tile (fewer valid rows)
 using TileDataRow  = Tile<Vec, dtype, tM, tN, BLayout::RowMajor, rmd_M, tN>;
-
-// Col-tail tile (fewer valid cols)
 using TileDataCol  = Tile<Vec, dtype, tM, tN, BLayout::RowMajor, tM, rmd_N>;
-
-// Corner tile
 using TileDataCor  = Tile<Vec, dtype, tM, tN, BLayout::RowMajor, rmd_M, rmd_N>;
 
-// In the kernel body:
 for (int i = 0; i < Mb; ++i) {
     TileData data;
     // ... process full tile ...
@@ -564,10 +542,9 @@ if constexpr (rmd_M > 0) {
 ```cpp
 #include <common/pto_tileop.hpp>
 #include "benchmark.h"
-#include "fileop.h"
-#include "matmul/matmul.hpp"          // kernel header
+#include "matmul/matmul.hpp"
 
-#define globM 256    // overridable via -DglobM=...
+#define globM 256
 #define globN 256
 #define globK 256
 #define tilM  16
@@ -578,15 +555,12 @@ if constexpr (rmd_M > 0) {
 #define ALIGN 4096
 
 int main() {
-    // 4KB-aligned stack buffers (required for DMA tile loads)
     uint8_t a_buf[globM * globK * sizeof(__half) + 2 * ALIGN];
     __half *a = (__half *)(((uint64_t)a_buf & ALIGN_MASK) + ALIGN);
-    // ... similarly for b, c ...
 
     BENCHSTART;
     matmul<__half, globM, globN, globK, tilM, tilN, tilK>(c, a, b);
     BENCHEND;
-
     return 0;
 }
 ```
@@ -612,13 +586,6 @@ export COMPILER_DIR=$(pwd)/output/linx_blockisa_llvm_musl/bin
 $COMPILER_DIR/clang++ \
     -mlxbc -fenable-matrix -O2 \
     -mllvm -enable-all-vector-as-tilereg=true \
-    -mllvm -linxv5-enable-HL-Inst-Opt=true \
-    -mllvm -linxv5-enable-dim-opt=true \
-    -mllvm -linxv5-enable-ldst-bridge=false \
-    -mllvm -linxv5-enable-continuous-mem-opt=true \
-    -mllvm -linxv5-enable-tile-clock-hand=false \
-    -mllvm -linxv5-enable-simt-clock-hand=true \
-    -mllvm -enable-misched=false \
     -std=c++20 \
     -D__linx -DENABLE_TENSOR_INSTR \
     -I<repo>/benchmark/one-level-arch/include \
@@ -631,11 +598,10 @@ $COMPILER_DIR/clang++ \
 |------|---------|
 | `-mlxbc` | Enable BlockISA code generation |
 | `-fenable-matrix` | Enable matrix/tile intrinsics |
-| `-std=c++20` | Required for concepts and `[[maybe_unused]]` |
-| `-D__linx` | Select Linx backend (jcore/ inline asm) |
+| `-std=c++20` | Required for concepts |
+| `-D__linx` | Select Linx backend |
 | `-DENABLE_TENSOR_INSTR` | Enable tensor instruction definitions |
 | `-O2` | Optimization level |
-| `-mllvm -enable-all-vector-as-tilereg=true` | Treat all vectors as tile registers |
 
 ### 5.3 Makefile Build System
 
@@ -661,15 +627,15 @@ bin/gfsim -f kernel.elf
 
 ### 6.1 Register Pressure Management
 
-- Prefer `MATMACC` (fused accumulate) over separate `TMUL` + `TADD`
-- Use `TileAcc<float>` for accumulation — FP32 accumulator avoids precision loss
+- Use `TMATMUL_ACC(acc, acc, a, b)` for fused accumulate (4-arg v5 form)
+- Use `Tile<Vec, float, R, C, RowMajor>` for accumulation — FP32 avoids precision loss
 - Keep live tile count within the 64-entry naming window and 256 KB capacity
 - Distribute long-lived tiles across T/U/M/N queues to avoid window overflow
 
 ### 6.2 Tile Reuse
 
 - Load A tiles once and reuse across N-dimension iterations (A-tile reuse)
-- Use `TCOPY` to duplicate tiles when the source is needed by multiple consumers
+- Use `TCVT` to copy tiles when the source is needed by multiple consumers
 - Minimize `TLOAD`/`TSTORE` — register-resident compute is much faster than DMA
 
 ### 6.3 Tail Handling
@@ -681,7 +647,7 @@ bin/gfsim -f kernel.elf
 ### 6.4 Layout Selection
 
 - GEMM operands must use `TileLeft`/`TileRight` (boxed fractal, 512B)
-- Accumulators must use `TileAcc` (boxed fractal, 1024B, FP32)
+- Accumulators: `Tile<Vec, float, R, C, RowMajor>` (no boxed layout needed)
 - Elementwise/reduction/load-store: plain `Tile<Vec, ...>` with `NoneBox`
 - Match global memory layout (`RowMajor`/`ColMajor`) to avoid implicit transposes
 
@@ -697,91 +663,88 @@ bin/gfsim -f kernel.elf
 - This enables full loop unrolling and compile-time register allocation
 - Use `constexpr` arithmetic for derived values (`Mb = gM / tM`, `rmd = gM % tM`)
 
-### 6.7 Known Toolchain Limitations
+### 6.7 v5 Migration Guide
 
-| Limitation | Workaround |
+| Old pattern | New pattern |
 |------------|------------|
-| `TABS` not exposed | Emulate: `TMULs(neg, x, -1); TROWMAX(pos, x); TROWMAX(neg, neg); TMAX(absmax, pos, neg);` |
-| `TNEG` not exposed | `TMULs(dst, src, -1.0)` |
-| `TEXPANDSCALAR` not in wrapper API | Use `TEXPANDSCALAR_Impl()` directly (include `jcore/TExpandScalar.hpp`) |
-| `TMATMUL_ACC` may crash on tile spill | Use fresh `TMATMUL` + explicit `TADD` accumulation if register pressure is high |
-| Broadcast ops (`TROWEXPAND*`) static_assert bug under `__linx` | Use `_TEPL` inline-asm variants from `template_asm.h` |
+| `TileAcc<float, R, C>` | `Tile<Vec, float, R, C, RowMajor>` |
+| `TMATMUL_ACC(acc, a, b)` | `TMATMUL_ACC(acc, acc, a, b)` |
+| `ACCCVT(out, acc)` + `TSTORE(gm, out)` | `TSTORE(gm, acc)` (direct) |
+| `TCOPYIN(tile, gm)` | `TLOAD(tile, gm)` |
+| `TCOPYOUT(gm, tile)` | `TSTORE(gm, tile)` |
+| `TCOPY(dst, src)` | `TCVT(dst, src)` (same-type = copy) |
+| `Location::Acc` | `Location::Vec` |
+| `template_asm.h` _TEPL variants | Standard tileop-api functions |
 
 ---
 
 ## 7. Appendix
 
-### 7.1 Complete Operation Index
+### 7.1 PTO ISA v0.57.1 Operation Index
 
-#### Matrix (CUBE family)
+#### TMA (9 operations)
 
-| Operation | Signature | Description |
+| Operation | Function | Description |
+|-----------|----------|-------------|
+| `TLOAD` | 0 | Global → Tile |
+| `TSTORE` | 1 | Tile → Global |
+| `TMOV` | 2 | Tile → Tile (layout transform) |
+| `TPREFETCH` | 3 | Prefetch (reserved) |
+| `MGATHER` | 4 | Gather by offsets |
+| `MSCATTER` | 5 | Scatter by offsets |
+| `MGATHER_MASK` | 6 | Masked gather (mask = positional source) |
+| `MSCATTER_MASK` | 7 | Masked scatter (mask = positional source) |
+| `MGATHER_CAS` | 8 | Compare-and-swap gather |
+
+#### CUBE (13 operations)
+
+| Operation | ACC Effect | Description |
 |-----------|-----------|-------------|
-| `MATMUL` | `(C&, A&, B&)` | `C = A × B` |
-| `MATMACC` | `(C&, A&, B&)` | `C += A × B` |
-| `MATMULMX` | `(C&, A&, AX&, B&, BX&)` | MX GEMM (A+B scale) |
-| `MATMULMXB` | `(C&, A&, B&, BX&)` | MX GEMM (B-only scale) |
-| `MATMACCMX` | `(C&, A&, AX&, B&, BX&)` | Fused MAC MX (A+B) |
-| `MATMACCMXB` | `(C&, A&, B&, BX&)` | Fused MAC MX (B-only) |
-| `ACCCVT` | `(tileVec&, tileAcc&)` | Acc → Vec convert |
+| `TMATMUL` | write-initialize | `D = A × B` |
+| `TMATMUL_BIAS` | write-initialize | `D = A × B + Bias` |
+| `TMATMUL_ACC` | read-write | `D = C + A × B` (4-arg: D, C, A, B) |
+| `TMATMUL_MX` | write-initialize | MX (A+B scaling) |
+| `TMATMUL_MX_BIAS` | write-initialize | MX with bias |
+| `TMATMUL_MX_ACC` | read-write | MX accumulate |
+| `TMATMUL_MX_BIAS_ACC` | read-write | MX bias accumulate |
+| `ACCCVT` | — | Removed in v5 (TMATMUL writes directly) |
+| `TGEMV` | write-initialize | Vector GEMV |
+| `TGEMV_BIAS`/`TGEMV_ACC`/`TGEMV_MX`/... | various | TGEMV variants |
 
-#### Memory (TLSU family)
-
-| Operation | Description |
-|-----------|-------------|
-| `TCOPYIN` / `TLOAD` | Global → Tile |
-| `TCOPYOUT` / `TSTORE` | Tile → Global |
-| `TCOPY` | Tile → Tile |
-| `MGATHER` | Scatter-load by offsets |
-| `MSCATTER` | Scatter-store by offsets |
-
-#### Elementwise Binary (TEPL family)
+#### TEPL (98 operations)
 
 `TADD`, `TSUB`, `TMUL`, `TDIV`, `TMAX`, `TMIN`, `TAND`, `TOR`, `TXOR`,
 `TCMP`, `TADDS`, `TSUBS`, `TMULS`, `TDIVS`, `TMAXS`, `TMINS`,
-`TADDC`, `TSUBC` (scalar operand variants)
-
-#### Elementwise Unary
-
-`TAbs`, `TExp`, `TLog`, `TSqrt`, `TRSqrt`, `TRecip`, `TNeg`, `TNot`,
-`TCvt`, `TCast`, `TReshape`, `TTrans`, `TSelect`
-
-#### Broadcast / Fill
-
+`TABS`, `TEXP`, `TLOG`, `TSQRT`, `TRSqrt`, `TRECIP`, `TNEG`, `TNOT`,
+`TCVT`, `TCAST`, `TRESHAPE`, `TTRANS`, `TSELECT`,
 `TEXPANDS`, `TCI`, `TROWEXPAND{ADD,SUB,MUL,DIV,MAX,MIN,EXPDIF}`,
-`TCOLEXPAND{ADD,SUB,MUL,DIV,MAX,MIN,EXPDIF}`, `TCONCAT`
-
-#### Reductions
-
+`TCOLEXPAND{ADD,SUB,MUL,DIV,MAX,MIN,EXPDIF}`, `TCONCAT`,
 `TROWSUM`, `TCOLSUM`, `TROWMAX`, `TCOLMAX`, `TROWMIN`, `TCOLMIN`,
 `TROWARGMAX`, `TROWARGMIN`, `TCOLARGMAX`, `TCOLARGMIN`,
-`TPARTADD`, `TPARTMUL`, `TPARTMAX`, `TPARTMIN`
-
-#### Shift / Extract / Special
-
-`TSHL`, `TSHR`, `TSLL`, `TSRL`, `TSHLS`, `TSHRS`,
-`TEXTRACT`, `TINSERT`, `TFILLPAD`, `TASSEMBLE`,
-`TSEL`, `TSELS`, `THISTOGRAM`, `TMRGSORT`, `TIMG2COL`
+`TPARTADD`, `TPARTMUL`, `TPARTMAX`, `TPARTMIN`,
+`TSHL`, `TSHR`, `TSHLS`, `TSHRS`,
+`TEXTRACT`, `TINSERT`, `TFILLPAD`,
+`TSEL`, `TSELS`, `THISTOGRAM`, `TMRGSORT`, `TIMG2COL`, ...
 
 ### 7.2 Location Enum
 
 ```cpp
 enum class Location {
-    Vec,      // General-purpose elementwise tile
-    Mat,      // Matrix tile (L1)
-    Left,     // GEMM A-operand (L0A)
-    Right,    // GEMM B-operand (L0B)
-    Acc,      // Accumulator (L0C, FP32)
-    Bias,     // Bias tile
-    Scaling   // Scaling factor tile
+    Vec,       // General-purpose elementwise tile
+    Mat,       // Matrix tile (L1)
+    Left,      // GEMM A-operand (L0A)
+    Right,     // GEMM B-operand (L0B)
+    Bias,      // Bias tile
+    Scaling,   // Scaling factor tile
+    Shared,    // v5: storage-class marker for SharedTile<LocalTile>
 };
 ```
 
 ### 7.3 Layout Enums
 
 ```cpp
-enum class BLayout  { RowMajor, ColMajor };           // Block-level (outer)
-enum class SLayout  { NoneBox, RowMajor, ColMajor };   // Sub-/fractal (inner)
+enum class BLayout  { RowMajor, ColMajor };
+enum class SLayout  { NoneBox, RowMajor, ColMajor };
 enum class PadValue { Zero=0, Max=1, Min=2, Null=3 };
 enum class CmpMode  { EQ, NE, GT, LT, GE, LE };
 ```
@@ -792,8 +755,8 @@ enum class CmpMode  { EQ, NE, GT, LT, GE, LE };
 |------------|----------|----------|----------|---------------|-----|
 | `TileLeft` | Left | ColMajor | RowMajor | 512 | GEMM A |
 | `TileRight` | Right | RowMajor | ColMajor | 512 | GEMM B |
-| `TileAcc` | Acc | ColMajor | RowMajor | 1024 | GEMM C (FP32) |
-| `Tile<Vec, ..., NoneBox>` | Vec | any | NoneBox | 512 | Elementwise |
+| `Tile<Vec, float, ..., RowMajor>` | Vec | RowMajor | NoneBox | 512 | Accumulator (v5) |
+| `Tile<Vec, dtype, ..., RowMajor>` | Vec | RowMajor | NoneBox | 512 | Elementwise |
 
 ### 7.5 Capacity Quick Reference
 
@@ -818,7 +781,7 @@ benchmark/one-level-arch/
 │   ├── fa/sfa_pto.hpp
 │   ├── reduction/reducesum_colvec_pto.hpp
 │   ├── transpose/transpose_pto.hpp
-│   └── deepseek/                     ← 19 migrated kernels
+│   └── deepseek/                     ← 22 migrated kernels
 ├── test/kernel/                      ← Test drivers + build system
 │   ├── common/Makefile.common        ← Shared build rules
 │   ├── matmul/{Makefile, compile.all, src/}
@@ -826,3 +789,10 @@ benchmark/one-level-arch/
 │   └── deepseek/{Makefile, compile.all, src/}
 └── compile_all.sh                    ← Top-level: compiles all operators
 ```
+
+### 7.7 References
+
+- [DavinciOO ISA Intrinsic Documentation](https://github.com/PTO-ISA/DavinciOO/tree/main/isa/intrinsic)
+- [Linx-TileOP-API tileop-usage](https://github.com/LinxISA/Linx-TileOP-API/tree/linx/docs/tileop-usage)
+- [SuperScalarModel Simulator](https://github.com/LinxISA/SuperScalarModel)
+- [Linx Toolchain Build](https://github.com/LinxISA/linx-toolchain-build)
