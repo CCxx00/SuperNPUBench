@@ -67,7 +67,7 @@ void multilayer_recompute(float *initial_residual, float *const *comb_mix_ptrs,
         auto ga = it_m(const_cast<float*>(comb_mix_ptrs[l]))(0, 0);
         auto gb = it_r(const_cast<float*>(layer_input_ptrs[l]))(0, 0);
         TLOAD(a, ga); TLOAD(b, gb);
-        TMATMUL_ACC(acc, a, b);                        // acc += A_l * B_l
+        TMATMUL_ACC(acc, acc, a, b);                        // acc += A_l * B_l
     }
     auto gout = out_iter(0, 0);
     tile_out o;
