@@ -28,10 +28,9 @@ SuperNPUBench/
 │   │   │   └── kernel/      # per-operator test cases
 │   │   └── compile_all.sh
 ├── microbenchmark/          # instruction-level micro-bench (cube/vector/memory/scalar)
-├── docs/                    # MkDocs documentation site
-│   ├── content/            # programming guide, tutorials, intrinsics, benchmarks
-│   ├── mkdocs.yml
-│   └── build.sh
+├── docs/                    # documentation
+│   ├── programming/        # PTO C++ Programming Guide
+│   └── workflow/           # end-to-end workflow docs
 └── compile_all.sh           # top-level: two-level | one-level | all
 ```
 
@@ -46,7 +45,7 @@ SuperNPUBench/
 ### one-level-arch (PTO ISA)
 - Tile-centric ISA with explicit memory hierarchy: Vec, Mat, Left, Right, Acc.
 - Programming model: tile operations via Linx-TileOP-API C++ templates.
-- Programming guide: [`docs/content/programming/cpp-programming-guide.md`](docs/content/programming/cpp-programming-guide.md).
+- Programming guide: [`docs/programming/pto c++ programming guide.md`](docs/programming/pto%20c++%20programming%20guide.md).
 
 Both backends share the same operator set and test layout; their kernel
 implementations differ in ISA style.
