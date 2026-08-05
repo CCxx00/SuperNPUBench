@@ -40,7 +40,7 @@ Current default test shape: **`[1, 8192]`**, `tile_r=1024` → **`Rb=8`**, fp16.
 | Role | Path |
 |------|------|
 | Kernel | `$ROOT/SuperNPUBench/benchmark/one-level-arch/kernels/normalization/rms_norm_binary_pto.hpp` |
-| Reference (single-tile) | `.../kernels/normalization/rms_norm_pto.hpp` |
+| Reference (single-tile) | `.../kernels/normalization/rms_norm/rms_norm_pto.hpp` |
 | Testcase | `.../test/kernel/normalization/rms_norm_binary/` |
 | Host entry | `.../rms_norm_binary/src/rms_norm_binary.cpp` |
 | Gen golden | `.../rms_norm_binary/src/gen_rms_norm_binary_data.py` |

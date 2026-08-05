@@ -3,7 +3,7 @@
 #include <cstdint>
 
 #include "fileop.h"
-#include "normalization/rms_norm_pto.hpp"
+#include "normalization/rms_norm/rms_norm_pto.hpp"
 
 #ifndef DType
 #define DType __half
