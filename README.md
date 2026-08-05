@@ -1,242 +1,319 @@
 # SuperNPUBench
 
-SuperNPUBench is a C++ tile-kernel benchmark repository for superscalar NPU
-compiler and model development. It contains direct compiler-validation cases,
-one-level kernel manifests, instruction microbenchmarks, and the standalone
-programming manual published from `docs/`.
+SuperNPUBench is a high-performance operator library and benchmark platform for
+NPU tile-programming ISA. It ships **two architecture backends** under `benchmark/`
+(two-level-arch = LinxISA, one-level-arch = PTO ISA) plus an instruction-level
+**microbenchmark** suite, all driven by the same Linx toolchain.
 
 ## Repository Structure
 
-```text
+```
 SuperNPUBench/
-|-- benchmark/
-|   |-- two-level-arch/   # promoted compiler and direct-boot cases
-|   `-- one-level-arch/   # source-backed tile-kernel catalog
-|-- microbenchmark/       # instruction-family microbenchmarks
-|-- docs/                 # standalone MkDocs manual, generators, and checks
-`-- compile_all.sh
+├── benchmark/
+│   ├── two-level-arch/      # Linx two-level block ISA (was benchmark-linxisa)
+│   │   ├── kernels/         # header-only operator implementations
+│   │   ├── test/            # test suites + build system
+│   │   │   ├── common/      # shared Makefile.common, _start.s, benchmark.h
+│   │   │   └── kernel/      # per-operator test cases
+│   │   └── compile_all.sh
+│   ├── one-level-arch/      # PTO one-level tile ISA (was benchmark-ptoisa)
+│   │   ├── kernels/
+│   │   ├── test/
+│   │   └── compile_all.sh
+├── microbenchmark/          # instruction-level micro-bench (cube/vector/memory/scalar)
+├── docs/                    # documentation
+│   ├── programming/        # PTO C++ Programming Guide
+│   └── workflow/           # end-to-end workflow docs + opencode skill
+└── compile_all.sh           # top-level: two-level | one-level | all
 ```
 
-Build output remains under architecture-local `output/` directories and is
-not committed.
+> Build outputs (`output/`, `**/output/`) and `.DS_Store` are gitignored.
 
-## Current Integration Baseline
+## Architecture Backends
 
-Use this repository through the `linx-isa` superproject. Its submodule pins
-select the matching v0.57 ISA state, LLVM 23 compiler sources, QEMU, and
-LinxCoreModel. Do not combine an arbitrary compiler binary with unrelated ISA
-or model revisions.
+### two-level-arch (LinxISA)
+- Block-structured ISA with heterogeneous cores: BCC (main), Cube (matrix), Vector, MTC/TMA (data transfer).
+- Programming model: block instructions (VPAR/VSEQ, CUBE, TMA, TEPL).
+
+### one-level-arch (PTO ISA)
+- Tile-centric ISA with explicit memory hierarchy: Vec (UB), Mat (L1), Left (L0A), Right (L0B), Acc (L0C).
+- Programming model: tile operations, Auto/Manual modes.
+- Programming guide: [`docs/programming/pto c++ programming guide.md`](docs/programming/pto%20c++%20programming%20guide.md).
+
+Both backends share the same operator set and test layout; their kernel
+implementations differ in ISA style.
+
+## Operator Overview
+
+Each backend implements operator categories:
+
+| Operator | Description |
+|----------|-------------|
+| **matmul** | FP4/BF16/FP32/FP16/FP8 matrix multiply; quantization, mixed precision, A/B reuse |
+| **fa** | Flash Attention; 2D unroll, SFA (block-sparse), HIF4 quantization, softmax_pto, unaligned boundary |
+| **transpose** | 3D~6D tensor transpose; multiple dtypes |
+| **reduction** | Row/column max & sum; single-tree, unaligned, cumsum, reduceprod |
+| **gelu** | GELU activation; exact (erf) and tanh approximation |
+| **broadcast** | 2D~5D broadcast; vectorized variants |
+| **gather** | Data gathering; large-scale, power-of-2 dims |
+| **concat** | Concatenation; gather/scatter modes |
+| **control** | `hashtable_lookup_simd` (pure tile-op, single-tier gfsim) |
+| **sort** | `topk` (radix-bucket histogram) |
+| **deepseek** | 23 migrated DeepSeek kernels (engram/mhc/moe/quant/transpose) |
+
+## Setup Environment
+
+SuperNPUBench compiles with the **Linx toolchain** (`linx_blockisa_llvm_musl`,
+clang-15, target `linx64v5-unknown-linux-musl`). Build it once from the
+[`linx-toolchain-build`](https://github.com/LinxISA/linx-toolchain-build) repo,
+which clones the matching ISA sources and produces the `linx_blockisa_llvm_musl`
+install tree that `COMPILER_DIR` points at.
+
+### 1. Clone the build repo
 
 ```bash
-git clone --recurse-submodules https://github.com/LinxISA/linx-isa.git
-cd linx-isa
-git submodule sync --recursive
-git submodule update --init --recursive
-export LINX_ROOT="$PWD"
+git clone https://github.com/LinxISA/linx-toolchain-build.git
+cd linx-toolchain-build
 ```
 
-Configure and build the in-repository compiler:
+### 2. Install host build tools
 
 ```bash
-cmake -S compiler/llvm/llvm -B compiler/llvm/build-linxisa-clang -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DLLVM_ENABLE_PROJECTS="clang;lld" \
-  -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=LinxISA \
-  -DLLVM_TARGETS_TO_BUILD=""
-
-cmake --build compiler/llvm/build-linxisa-clang \
-  --target clang lld llvm-objdump llvm-objcopy llvm-readobj -j 12
-
-export COMPILER_DIR="$LINX_ROOT/compiler/llvm/build-linxisa-clang/bin"
-"$COMPILER_DIR/clang" --version
+sudo apt-get install -y git make cmake ninja-build gcc g++ python3 autoconf m4
 ```
 
-The superproject pin is the source of truth for the exact compiler revision;
-rebuild after that pin changes.
+### 3. Initialize component sources
+
+`make init-src` clones the five component repos under `src/` on their pinned
+branches (run it again any time to fetch updates):
+
+| Directory | Repository | Branch |
+| --- | --- | --- |
+| `src/llvm-project` | `LinxISA/llvm-project` | `dev-llvm15_56` |
+| `src/musl` | `LinxISA/linx-musl` | `linx` |
+| `src/jemalloc` | `LinxISA/jemalloc` | `linx` |
+| `src/linux-linxisa` | `LinxISA/linux` | `main` |
+| `src/Linx-TileOP-API` | `LinxISA/Linx-TileOP-API` | `linx` |
+
+```bash
+make init-src
+```
+
+### 4. Build the toolchain
+
+Only `linx64v5-linux-musl` is supported by the top-level Makefile:
+
+```bash
+make WITH_TARGET=linx64v5-linux-musl
+```
+
+This builds, in order: LLVM/clang/lld → kernel headers → musl → compiler-rt →
+libc++/libc++abi/libunwind → jemalloc → Linx-TileOP-API headers. Progress is
+tracked by stamp files under `stamps/`, so re-running `make` resumes from the
+last completed step; `make clean` rebuilds from scratch. The install tree is
+written to `output/linx_blockisa_llvm_musl/`:
+
+```
+output/linx_blockisa_llvm_musl/
+├── bin/        # clang, clang++, ld.lld, llvm-ar/nm/ranlib,
+│              # linx64v5-linux-musl-clang(++) symlinks
+├── lib/        # clang runtime, libc++, ...
+└── sysroot/    # musl + kernel headers + runtime libs
+```
+
+### 5. Point SuperNPUBench at the toolchain
+
+```bash
+export COMPILER_DIR=$(pwd)/output/linx_blockisa_llvm_musl/bin
+$COMPILER_DIR/clang --version
+# clang version 15.0.4 (linx64v5-musl-local ...)
+# Target: linx64v5-unknown-linux-musl
+```
+
+Then proceed to [Quick Start](#quick-start).
+
+### (Optional) Package
+
+```bash
+make package     # -> output/linx_blockisa_llvm_musl.tar.gz
+```
+
+### Platform notes (macOS)
+
+The build also works on Apple Silicon, but the system `make` (GNU 3.81) and
+`tar` (libarchive) differ from the Linux defaults, so two extra steps are
+needed:
+
+- **GNU make >= 4** is required by the kernel-headers step
+  (`GNU Make >= 4.0 is required`). `brew install make` (provides `gmake`) and
+  run the build with `gmake`, or put `gmake` on `PATH` ahead of `/usr/bin/make`
+  (the kernel Makefile invokes `make` literally).
+- **GNU tar** is required by `make package` (`tar --format=gnu`). `brew install
+  gnu-tar` and prepend `$(brew --prefix)/opt/gnu-tar/libexec/gnubin` to `PATH`.
+- **sancov host-compile fix**: Apple clang rejects an initializer-list in
+  `llvm/tools/sancov/sancov.cpp` (`chosen constructor is explicit in
+  copy-initialization`). If the LLVM build fails there, change the two
+  `SpecialCaseList::createOrDie({{...}}, ...)` call sites to pass an explicit
+  `std::vector<std::string>{...}`, then resume with
+  `ninja -C build/build-llvm-musl`.
 
 ## Quick Start
 
-Compile the promoted memory and arithmetic TileOP cases:
+### 1. Environment
+
+Build the Linx toolchain once (see [Setup Environment](#setup-environment)), then
+point `COMPILER_DIR` at it:
 
 ```bash
-cd "$LINX_ROOT/workloads/SuperNPUBench/benchmark/two-level-arch/test/tileop_api"
-make TESTCASE=TAdd PLAT=linx COMPILER_DIR="$COMPILER_DIR"
-make TESTCASE=TLoad PLAT=linx COMPILER_DIR="$COMPILER_DIR"
-make TESTCASE=TStore PLAT=linx COMPILER_DIR="$COMPILER_DIR"
+export COMPILER_DIR=/path/to/linx_blockisa_llvm_musl/bin
 ```
 
-Run one case through the canonical compiler, QEMU, and cycle-model sequence:
+### 2. Compile an operator
 
 ```bash
-cd "$LINX_ROOT"
-export QEMU="$(tools/bringup/run_qemu_build_clean.sh)"
-python3 tools/bringup/run_ai_workload_flow.py \
-  --profile smoke \
-  --kind supernpu \
-  --case '=supernpu-tileop_api-TAdd' \
-  --run-id supernpu-tadd
+# two-level-arch (LinxISA)
+cd benchmark/two-level-arch/test/kernel/matmul
+make TESTCASE=matmul TYPE=MASK MODE=MASK_FP32 M=256 N=256 K=256 tM=64 tN=64 tK=64
+
+# one-level-arch (PTO ISA)
+cd benchmark/one-level-arch/test/kernel/matmul
+make TESTCASE=matmul TYPE=HIF4_HIF4 M=256 N=2048 K=2048 tM=128 tN=128 tK=128
 ```
 
-The runner stops on the first failed stage. A compiler-passing ELF executes in
-QEMU before the same artifact is promoted to plain `gfsim -f <elf>`.
+### 3. Batch / full compilation
 
-<!-- BENCHMARK-CATALOG:START -->
-## Benchmark catalog
+```bash
+# per-operator batch
+cd benchmark/two-level-arch/test/kernel/matmul && bash compile.all
 
-The active one-level manifests contain **87 build variants**. Every name below
-has a source-backed page with its build command and tile intrinsic surface in
-the website's **Benchmark Reference** section.
-Catalog presence records source inventory; it does not imply promotion on the
-current compiler and model flow.
+# all operators of one backend
+./compile_all.sh two-level      # two-level-arch only
+./compile_all.sh one-level      # one-level-arch only
+./compile_all.sh all            # both (default)
+```
 
-<details><summary><strong>broadcast</strong> (4 names, 6 variants)</summary>
+Artifacts land in `benchmark/<arch>/output/kernel/<operator>/elf/`.
 
-`broadcast`, `broadcast_vec_019`, `broadcast_vec_039`, `broadcast_vec_07`
+## Microbenchmark
 
-</details>
+`microbenchmark/` is an instruction-level bench organized by ISA family,
+generated by `gen_cases.py`. All 293 cases compile & link on the Linx toolchain.
 
-<details><summary><strong>concat</strong> (2 names, 4 variants)</summary>
+| family | covers | cases |
+| --- | --- | ---: |
+| cube (CUBE) | TMATMUL / TMATMUL_BIAS / TMATMUL_MX / ACCCVT | 9 |
+| vector (TEPL) | elementwise / tile-scalar / reduce / expand (toolchain-exposed subset) | 135 |
+| memory (TLSU) | TLOAD / TSTORE / TMOV / MGATHER / MSCATTER (+mask, layout) | 25 |
+| scalar (GPR) | int ALU / load-store / float / conversion × throughput+latency | 124 |
+| **total** | | **293** |
 
-`concat_gather`, `concat_scatter`
+```bash
+cd microbenchmark && make TESTCASE=tmatmul_fp16_64x64x64   # one case
+cd microbenchmark && bash compile_all.sh all               # all families
+```
 
-</details>
+See [`microbenchmark/README.md`](microbenchmark/README.md) for details.
 
-<details><summary><strong>control</strong> (1 name, 6 variants)</summary>
+## Running on the Models
 
-`hashtable_lookup_simd`
+Compiled ELF binaries run on the **SuperScalarModel** simulator suite (no longer
+on LinxCoreModel). Build `gfrun`/`gfsim` from the
+[SuperScalarModel](../SuperScalarModel) repo, then point them at the ELF:
 
-</details>
+- `gfrun` — functional model (correctness)
+- `gfsim` — cycle-accurate model (timing)
 
-<details><summary><strong>deepseek</strong> (23 names, 23 variants)</summary>
+```bash
+# from the SuperScalarModel repo root (where bin/ lives)
+bin/gfrun -f /path/to/SuperNPUBench/benchmark/two-level-arch/output/kernel/<op>/elf/<name>.elf
+bin/gfsim -f /path/to/SuperNPUBench/benchmark/two-level-arch/output/kernel/<op>/elf/<name>.elf
+```
 
-`aux_fi`, `batched_transpose`, `cast_back_per_channel`, `cast_back_per_token`, `engram_hash_layer`, `expand_to_fused`, `expand_to_mhc_bwd`, `expand_to_mhc_fwd`, `fn_normw_merge_fwd`, `fused_weight`, `get_fused_mapping`, `group_count`, `inplace_unique_group_indices`, `mask_indices_by_tp`, `multilayer_recompute`, `normalize_weight`, `per_channel_cast`, `per_token_cast`, `reduce_fused`, `rms_norm`, `sinkhorn_fwd`, `swiglu_forward_and_per_token_cast`, `topk_gate`
+### Tile-op kernels: single-tier gfsim mode
 
-</details>
+Kernels written purely with tile ops using TEPL template instructions (e.g.
+`control/hashtable_lookup_simd`) run on the VectorLite engine, which gfsim only
+steps in **single-tier mode**:
 
-<details><summary><strong>element_wise/gelu</strong> (1 name, 1 variant)</summary>
+```bash
+bin/gfsim -f <elf> -s core.singleTierMode=true
+```
 
-`gelu`
+Without this flag the engine is inert and the run deadlocks. `gfrun` does not
+need the flag.
 
-</details>
+## Build System
 
-<details><summary><strong>fa</strong> (4 names, 13 variants)</summary>
+### Makefile parameters
 
-`fa_2d_unroll`, `fa_HIF4_HIF4`, `fa_softmax_pto`, `sfa`
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `TESTCASE` | Test case name | `matmul`, `fa_2d_unroll` |
+| `TYPE` | Operator type (matmul) | `HIF4_HIF4`, `A16W4`, `MASK` |
+| `MODE` | Operator mode | `MASK_FP32`, `BF16x2_NOGATHER` |
+| `M/N/K` | Matrix dimensions | `M=256 N=2048 K=2048` |
+| `tM/tN/tK` | Tile sizes | `tM=128 tN=128 tK=128` |
+| `COMPILER_DIR` | Compiler path | `/path/to/linx/bin` |
+| `PLAT` | Platform | `linx` (default), `cpu` |
 
-</details>
+### Build targets
 
-<details><summary><strong>flashMLA</strong> (1 name, 2 variants)</summary>
-
-`flashMLA`
-
-</details>
-
-<details><summary><strong>gather</strong> (1 name, 1 variant)</summary>
-
-`gather`
-
-</details>
-
-<details><summary><strong>matmul</strong> (1 name, 16 variants)</summary>
-
-`matmul`
-
-</details>
-
-<details><summary><strong>multi_thread/fa</strong> (1 name, 1 variant)</summary>
-
-`fa_2d_unroll_gmma`
-
-</details>
-
-<details><summary><strong>multi_thread/matmul</strong> (2 names, 2 variants)</summary>
-
-`matmul`, `matmul_partial`
-
-</details>
-
-<details><summary><strong>multi_thread/vec</strong> (2 names, 2 variants)</summary>
-
-`tadd`, `trowsum`
-
-</details>
-
-<details><summary><strong>reduction/reducemax_col</strong> (1 name, 1 variant)</summary>
-
-`reducemax_col`
-
-</details>
-
-<details><summary><strong>reduction/reducemax_row</strong> (1 name, 1 variant)</summary>
-
-`reducemax_row`
-
-</details>
-
-<details><summary><strong>reduction/reducesum_col</strong> (1 name, 2 variants)</summary>
-
-`reducesum_col`
-
-</details>
-
-<details><summary><strong>reduction/reducesum_row</strong> (1 name, 1 variant)</summary>
-
-`reducesum_row`
-
-</details>
-
-<details><summary><strong>sort</strong> (1 name, 1 variant)</summary>
-
-`topk`
-
-</details>
-
-<details><summary><strong>transpose</strong> (1 name, 4 variants)</summary>
-
-`transpose`
-
-</details>
-
-<!-- BENCHMARK-CATALOG:END -->
-
-The public catalog covers active one-level `compile.all` manifests. Those
-commands are source inventory, not current LLVM 23 promotion evidence: the
-one-level make lane still contains a retired compiler option and an unresolved
-include-root dependency. Use `make -n` to inspect a catalog command and use the
-canonical runner for current compile/model validation.
-
-## Microbenchmarks
-
-`microbenchmark/` organizes cases by matrix, vector, memory, and scalar
-instruction families. See [the microbenchmark README](microbenchmark/README.md)
-for its generated case inventory and lane-specific commands.
+```bash
+make TESTCASE=<case> all      # compile
+make TESTCASE=<case> diss     # disassembly
+make TESTCASE=<case> sim      # run in simulator
+make TESTCASE=<case> debug    # debug mode
+make clean                    # clean current operator
+make clean_all                # clean all
+```
 
 ## Documentation
 
-The website source is self-contained under `docs/`. Build and verify it with:
+- **PTO C++ Programming Guide**: [`docs/programming/pto c++ programming guide.md`](docs/programming/pto%20c++%20programming%20guide.md)
+- **End-to-end Workflow**: [`docs/workflow/operator_to_chip_execution_flow.md`](docs/workflow/operator_to_chip_execution_flow.md)
+- **Per-operator README**: see `benchmark/one-level-arch/kernels/<operator>/README.md`
+- **Microbenchmark**: [`microbenchmark/README.md`](microbenchmark/README.md)
 
-```bash
-python3 -m pip install -r docs/requirements.txt
-python3 docs/scripts/generate_benchmark_manual.py
-python3 docs/scripts/generate_deepseek_manifest.py
-python3 docs/scripts/generate_deepseek_manual.py
-python3 docs/scripts/sync_golden_manual.py --check --linx-root "$LINX_ROOT"
-docs/build.sh
-```
+## Known Issues
 
-Start with:
+- **`control/hashtable_lookup_simd`**: pure tile-op kernel; run gfsim with
+  `-s core.singleTierMode=true` (see above). Its `.data` files are generated by
+  the Makefile (`gen_data.py`) on first build.
+- **microbenchmark `tmatmul_acc`**: skipped — toolchain `matmul.ac` backend crash.
+- **microbenchmark vector subset**: only toolchain-exposed TEPL opcodes are
+  generated; `TGEMV*`/`TMOV` not yet exposed (TCOPY fallback). See
+  [`microbenchmark/README.md`](microbenchmark/README.md).
+- **`fa_2d_unroll`**: `Ydim=1` may still trigger compiler assertion under some
+  configs; prefer `Y∈{2,4}`.
+- **multi_thread operators** (`test/kernel/multi_thread/`): WIP — use
+  `get_thread_id()` (not yet exposed by toolchain) and oversized tile
+  allocations; not included in `compile_all.sh`.
 
-- [toolchain setup](docs/content/start/toolchain.md)
-- [build, run, and disassembly workflow](docs/content/start/build-run.md)
-- [C++ tile kernel programming guide](docs/content/programming/cpp-programming-guide.md)
-- [intrinsic reference](docs/content/intrinsics/index.md)
-- [benchmark reference](docs/content/benchmarks/index.md)
+## Toolchain
 
-## Adding or Updating a Benchmark
+- Compiler: `linx_blockisa_llvm_musl` (clang-15, linx64v5-musl)
+- Flags: `-mlxbc -fenable-matrix -O2 -mllvm -enable-all-vector-as-tilereg=true -std=c++20`
+- Target: Linx64 V5
 
-1. Add the kernel and its test entrypoint under the appropriate architecture.
-2. Add every supported variant to the local `compile.all` manifest.
-3. Regenerate the benchmark and DeepSeek pages when their source inventories
-   change.
-4. Compile a bounded promoted case with the pinned compiler.
-5. Run `docs/build.sh` before publication.
+## Development Guide
+
+### Adding an operator
+
+1. Add header-only kernel under both `benchmark/<arch>/kernels/<operator>/`.
+2. Create test dir under both `benchmark/<arch>/test/kernel/<operator>/` with
+   `Makefile`, `compile.all`, `src/`.
+3. Mirror the two backends.
+
+### Conventions
+
+- Header-only kernels; PTO tile-programming paradigm.
+- Build artifacts not tracked (`.gitignore`).
+- Keep both backends in parallel.
+
+## Related Links
+
+- [LinxISA](https://linxisa.github.io/linx-isa/) · [PTO ISA](https://pto-isa.github.io/docs/isa/tile/)
+
+## License
+
+See LICENSE.
