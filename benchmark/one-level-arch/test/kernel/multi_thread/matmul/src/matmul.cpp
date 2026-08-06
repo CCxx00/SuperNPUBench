@@ -106,8 +106,9 @@ void matmul_multithread(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
     constexpr int Mb = gM / tM;
     constexpr int Nb = gN / tN;
     constexpr int Kb = gK / tK;
-
+    #pragma clang loop unroll(full)
     for (int i = 0; i < Mb; ++i) {
+        #pragma clang loop unroll(full)
         for (int j = 0; j < Nb; ++j) {
             tileC tC;
 
@@ -137,25 +138,16 @@ void matmul_multithread(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
 
                 // Temporarily retained as load-only code so the original loop
                 // structure remains visible during the Shared B experiment.
-                for (int k = 1; k < Kb - 1; ++k) {
+                #pragma clang loop unroll(full)
+                for (int k = 1; k < Kb; ++k) {
                     tileA tA;
                     tileBLocal tBLocal;
                     auto gA = gIterA(i, k);
                     auto gB = gIterB(k, j);
                     TLOAD(tA, gA);
                     TLOAD(tBLocal, gB);
-                    // TMATMUL_ACC(tCout, tA, tB);
-                }
-
-                // Keep the final load in place while disabling FIXP.
-                {
-                    tileA tA;
-                    tileBLocal tBLocal;
-                    auto gA = gIterA(i, Kb - 1);
-                    auto gB = gIterB(Kb - 1, j);
-                    TLOAD(tA, gA);
-                    TLOAD(tBLocal, gB);
-                    // TMATMUL_ACC_FIXP(tCout, tA, tB, fixp::keep_acc());
+                    tileBShared tBShared = TMOV_L2S_PUBLISH(tBLocal);
+                    TMATMUL_ACC(tC, tC, tA, tBShared);
                 }
             }
 

@@ -149,7 +149,7 @@ for op, kind, dt, sz in [
 # ============ matrix (TMA/CUBE direct operations) cases ============
 # These benchmark shapes intentionally keep each input at or below 8 KiB;
 # this is a workload choice, not the architectural 256 KiB-per-PE capacity.
-# TGEMV* are not yet exposed by the toolchain; only TMATMUL* + ACCCVT land.
+# TGEMV* are not yet exposed by the toolchain; only TMATMUL* land.
 C = []
 
 def csize(dt):
@@ -174,9 +174,6 @@ cube("TMATMUL_MX", "matmul_mx", "fp16")        # e4m3 placeholder -> fp16
 # matmul.ac backend still crashes (llvm.linx.blk.matmul.ac SelectionDAG) on latest toolchain
 # cube("TMATMUL_ACC", "matmul_acc", "fp16")
 # cube("TMATMUL_ACC", "matmul_acc", "fp32")
-cube("ACCCVT", "acccvt", "fp16")
-cube("ACCCVT", "acccvt", "fp32")
-cube("ACCCVT_NZ2ND", "acccvt", "fp16")
 
 # TODO: re-enable when toolchain exposes TGEMV/TGEMV_ACC/TGEMV_BIAS/TGEMV_MX.
 # cube("TGEMV", "gemv", "fp16")
@@ -360,8 +357,6 @@ int main() {{
         body = f"    bench_gemv_bias<{ct},M,N,K>(c,a,b,bias);\n"
     elif c.kind == "gemv_mx":
         body = f"    bench_gemv_mx<{ct},M,N,K>(c,a,as,b,bs);\n"
-    elif c.kind == "acccvt":
-        body = f"    bench_acccvt<{ct},M,N,K>(c,a,b);\n"
     else:
         body = f"    // unhandled kind {c.kind}\n"
     return head + body + tail
