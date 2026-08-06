@@ -5,8 +5,6 @@
 // Intrinsic naming follows DavinciOO/PTO (OPERATOR_REFERENCE.md §8):
 //   TMATMUL / TMATMUL_ACC / TMATMUL_BIAS / TMATMUL_MX
 //   TGEMV  / TGEMV_ACC  / TGEMV_BIAS  / TGEMV_MX
-//   ACCCVT  (ACC -> ordinary Tile export)
-// ACC is implicit for matrix operations and is exported via ACCCVT.
 
 #include <common/pto_tileop.hpp>
 #include <cstdint>
@@ -31,7 +29,7 @@ using tAcc_t = Tile<Location::Vec, float, M, N, BLayout::RowMajor>;  // ACC is f
 template <typename D, int M, int N>
 using tOut_t = Tile<Location::Vec, D, M, N, BLayout::RowMajor>;
 
-// C = A * B   (TMATMUL -> ACC -> ACCCVT -> Tile -> GM)
+// C = A * B   (TMATMUL -> Tile -> GM)
 template <typename D, int M, int N, int K>
 void bench_matmul(D *c, D *a, D *b) {
     using itA = global_iterator<gmA_t<D, M, K>, tL_t<D, M, K>>;
@@ -98,7 +96,7 @@ void bench_matmul_mx(D *c, D *a, D *as, D *b, D *bs) {
 }
 
 // FIXME: TGEMV / TGEMV_ACC / TGEMV_BIAS / TGEMV_MX are not yet exposed by the
-// toolchain (only TMATMUL* and ACCCVT are). The gemv bench templates are
+// toolchain (only TMATMUL* are). The gemv bench templates are
 // disabled until the TGEMV* intrinsics land. Re-enable and regenerate gemv
 // cases when they appear.
 #if 0
@@ -168,21 +166,5 @@ void bench_gemv_mx(D *c, D *a, D *as, D *b, D *bs) {
     TSTORE(gC0, tOut);
 }
 #endif  // FIXME: TGEMV* not exposed yet
-
-// standalone ACCCVT: load A, matmul to ACC, export via ACCCVT
-template <typename D, int M, int N, int K>
-void bench_acccvt(D *c, D *a, D *b) {
-    using itA = global_iterator<gmA_t<D, M, K>, tL_t<D, M, K>>;
-    using itB = global_iterator<gmB_t<D, K, N>, tR_t<D, K, N>>;
-    using itC = global_iterator<gmC_t<D, M, N>, tOut_t<D, M, N>>;
-    itA gA(a); itB gB(b); itC gC(c);
-    auto gA0 = gA(0, 0), gB0 = gB(0, 0), gC0 = gC(0, 0);
-    tL_t<D, M, K> tA; tR_t<D, K, N> tB;
-    tAcc_t<D, M, N> tAcc; tOut_t<D, M, N> tOut;
-    TLOAD(tA, gA0);
-    TLOAD(tB, gB0);
-    TMATMUL(tOut, tA, tB);
-    TSTORE(gC0, tOut);
-}
 
 #endif

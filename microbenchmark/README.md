@@ -2,9 +2,9 @@
 
 Instruction-level benchmarks organized by ISA family. The tile families
 (cube/vector/memory) use PTO 0.57.1 intrinsic naming (`TLOAD/TSTORE/TMOV`,
-`TMATMUL/TGEMV/ACCCVT`, TEPL set) via `<common/pto_tileop.hpp>`; the scalar
+`TMATMUL/TGEMV`, TEPL set) via `<common/pto_tileop.hpp>`; the scalar
 family uses plain C + volatile to drive the GPR micro-ISA. The generator emits
-284 cases; the active toolchain determines which structural cases compile.
+281 cases; the active toolchain determines which structural cases compile.
 
 ## Directory Structure
 
@@ -16,7 +16,7 @@ microbenchmark/
 ├── common/
 │   └── bench_utils.hpp      # data init / verify helpers
 ├── cube/                    # named TMA/CUBE direct operations
-│   ├── cube_bench.hpp       # bench_matmul / bench_gemv / bench_acccvt ...
+│   ├── cube_bench.hpp       # bench_matmul / bench_gemv ...
 │   ├── Makefile / compile.all / src/*.cpp
 ├── vector/                  # TEPL family (BSTART.TEPL)
 │   ├── vector_bench.hpp     # bench_binary / unary / ternary / reduce / scalar ...
@@ -33,11 +33,11 @@ microbenchmark/
 
 | family | covers | cases |
 | --- | --- | ---: |
-| matrix (TMA/CUBE direct) | TMATMUL / TMATMUL_BIAS / TMATMUL_MX / ACCCVT | 9 |
+| matrix (TMA/CUBE direct) | TMATMUL / TMATMUL_BIAS / TMATMUL_MX | 6 |
 | vector (TEPL) | elementwise / tile-scalar / reduce / expand | 126 |
 | memory (TLSU) | TLOAD / TSTORE / TMOV / MGATHER / MSCATTER / *_MASK / layout | 25 |
 | scalar (GPR) | int ALU / load-store / float / conversion × throughput+latency | 124 |
-| **total** | | **284** |
+| **total** | | **281** |
 
 - tile dtypes: `fp16 / fp32 / i8 / i16 / i32`; scalar dtypes: `i32 / i64 / f32 / f64`.
 - tile sizes: vector/memory 16×16 (some 32×32); matrix 64³ (fp32 32³, with an 8 KiB benchmark working-set choice).
