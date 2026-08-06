@@ -21,6 +21,12 @@ constexpr int kNumBuckets = 256;
 using TileU32 = Tile<Location::Vec, uint32_t, 16, 16, BLayout::RowMajor>;
 
 // ============================================================================
+// Scalar helper: find kth bin from histogram prefix scan
+// ============================================================================
+
+#ifndef __linx  // SIMT constructs below are not supported under __linx
+
+// ============================================================================
 // Phase 1: SIMT Extract high8 histogram (per-bucket)
 //
 // Grid: <<<1, 256, 1>>>  (1 block, 256 lanes, one lane per bucket 0..255)
@@ -92,6 +98,8 @@ void ExtractLow8HistForKthBin_Impl(tile_shape_out& dst, const uint16_t* src,
     ExtractLow8HistForKthBin_Vec_RowMajor<tile_shape_out>
         <<<1, 256, 1>>>(dst.data(), src, kth_bin);
 }
+
+#endif // __linx  // SIMT constructs end here; find_kth_bin below is scalar
 
 // ============================================================================
 // Scalar helper: prefix scan to find kth_bin and remaining count

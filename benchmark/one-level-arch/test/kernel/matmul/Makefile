@@ -4,6 +4,7 @@
 #   - HIF4_HIF4: FP4 x FP4 matmul with microscaling (uses HiF4_HiF4.cpp)
 #   - A16W4: BF16 x FP4 mixed precision (uses A16W4.cpp)
 #   - MASK: Generic matmul with mask (uses matmul.cpp)
+#   - GMMA: GMMA matmul model with PE-sliced lhs and shared rhs (uses matmul_gmma.cpp)
 #
 # For TYPE=MASK, use MODE to select variant:
 #   - VEC, FRAC
@@ -55,6 +56,19 @@ ifeq ($(TYPE), MASK)
       TARGET = $(ELF_HEAD)/$(NAME)_$(MODE)_M$(M)_N$(N)_K$(K)_tM$(tM)_tN$(tN)_tK$(tK).elf
    else
       TARGET = $(ELF_HEAD)/$(TESTCASE)_$(TYPE)_$(MODE)_M$(M)_N$(N)_K$(K)_tM$(tM)_tN$(tN)_tK$(tK).elf
+   endif
+endif
+
+ifeq ($(TYPE), GMMA)
+   SRC_FILE = $(TEST_ROOT)/$(CASE_SRC_DIR)/matmul_gmma.cpp
+   DEFINES += -DglobM=$(M) -DglobN=$(N) -DglobK=$(K) -DtilM=$(tM) -DtilN=$(tN) -DtilK=$(tK)
+   ifneq ($(MODE), )
+      DEFINES += -D$(MODE)
+   endif
+   ifneq ($(NAME), )
+      TARGET = $(ELF_HEAD)/$(NAME)_GMMA_$(MODE)_M$(M)_N$(N)_K$(K)_tM$(tM)_tN$(tN)_tK$(tK).elf
+   else
+      TARGET = $(ELF_HEAD)/$(TESTCASE)_GMMA_$(MODE)_M$(M)_N$(N)_K$(K)_tM$(tM)_tN$(tN)_tK$(tK).elf
    endif
 endif
 

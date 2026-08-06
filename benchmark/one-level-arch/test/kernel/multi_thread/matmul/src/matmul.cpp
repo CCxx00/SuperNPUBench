@@ -1,0 +1,215 @@
+#include <common/pto_tileop.hpp>
+#include <cstdint>
+#include "benchmark.h"
+#include "fileop.h"
+
+using namespace pto;
+
+#ifndef globM
+#define globM 256
+#endif
+
+#ifndef globN
+#define globN 256
+#endif
+
+#ifndef globK
+#define globK 256
+#endif
+
+#ifndef tilM
+#define tilM 32
+#endif
+
+#ifndef tilN
+#define tilN 32
+#endif
+
+#ifndef tilK
+#define tilK 32
+#endif
+
+#ifndef Batch
+#define Batch 1
+#endif
+
+#define ALIGN_MASK 0xfffffffffffff000ull
+#define ALIGN (4 * 1024)
+
+// Four-PE multi-thread GMMA matmul.
+//
+// Mathematical semantics:
+//   C = A * B
+//   A: [M, K], B: [K, N], C: [M, N]
+//
+// Host-visible storage:
+//   - A is an array of four PE matrices, each with shape [gM, gK].
+//   - C is an array of four PE matrices, each with shape [gM, gN].
+//   - B is one shared matrix with shape [gK, gN].
+//
+// Thread/PE mapping:
+//   - get_thread_idx() selects one complete A/C matrix from those arrays.
+//   - The kernel's gM and tM are already PE-local dimensions; no further
+//     row splitting occurs inside the kernel.
+//   - B is not split. Each PE loads the complete [tK, tN] rhs operand into
+//     TileRight.
+//
+// Tile mapping:
+//   - Each PE holds A_pe [tM, tK] and C_pe [tM, tN].
+//   - The four PE-local A cells collectively form A_big [4*tM, tK].
+//   - Each PE presents one TileRight B operand with shape [tK, tN].
+//   - TMATMUL collectively computes C_big [4*tM, tN], while each PE receives
+//     only its own accumulator C_pe [tM, tN].
+template <typename dtype, int gM, int gN, int gK, int tM, int tN, int tK>
+void matmul_multithread(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
+    constexpr int kTileByteLimit = 8 * 1024;
+
+    static_assert(gM % tM == 0, "M must be divisible by tM");
+    static_assert(gN % tN == 0, "N must be divisible by tN");
+    static_assert(gK % tK == 0, "K must be divisible by tK");
+    static_assert(tM * tK * sizeof(dtype) < kTileByteLimit,
+                  "each PE A tile must be smaller than 8 KB");
+    static_assert(tM * tN * sizeof(float) < kTileByteLimit,
+                  "each PE C tile must be smaller than 8 KB");
+    static_assert(tK * tN * sizeof(dtype) < kTileByteLimit,
+                  "shared B tile must be smaller than 8 KB");
+
+    const uint32_t tid = get_thread_idx();
+
+    // A/C are arrays of PE matrices. Select one complete matrix before
+    // constructing the PE-local global iterators. B keeps its shared base.
+    a_ptr += tid * gM * gK;
+    c_ptr += tid * gM * gN;
+
+    using gmA = global_tensor<dtype, RowMajor<gM, gK>>;
+    using gmB = global_tensor<dtype, RowMajor<gK, gN>>;
+    using gmC = global_tensor<float, RowMajor<gM, gN>>;
+
+    // PE-private lhs and output cells.
+    using tileA = TileLeft<dtype, tM, tK>;
+    using tileC =
+        Tile<Location::Vec, float, tM, tN, BLayout::RowMajor>;
+
+    // TLOAD requires a local tile. Publish it to compiler-managed shared
+    // storage before passing B to the shared-right TMATMUL overload.
+    using tileBLocal = TileRight<dtype, tK, tN>;
+    using tileBShared = SharedTile<tileBLocal>;
+
+    using itA = global_iterator<gmA, tileA>;
+    using itB = global_iterator<gmB, tileBLocal>;
+    using itC = global_iterator<gmC, tileC>;
+
+    itA gIterA(a_ptr);
+    itB gIterB(b_ptr);
+    itC gIterC(c_ptr);
+
+    constexpr int Mb = gM / tM;
+    constexpr int Nb = gN / tN;
+    constexpr int Kb = gK / tK;
+
+    for (int i = 0; i < Mb; ++i) {
+        for (int j = 0; j < Nb; ++j) {
+            tileC tC;
+
+            if constexpr (Kb == 1) {
+                tileA tA;
+                tileBLocal tBLocal;
+
+                auto gA = gIterA(i, 0);
+                TLOAD(tA, gA);
+                auto gB = gIterB(0, j);
+                TLOAD(tBLocal, gB);
+                tileBShared tBShared = TMOV_L2S_PUBLISH(tBLocal);
+                TMATMUL(tC, tA, tBShared);
+            } else {
+                // Compile-only Shared B experiment: initialize tC from the
+                // first K block and temporarily disable the ACC/FIXP path.
+                {
+                    tileA tA;
+                    tileBLocal tBLocal;
+                    auto gA = gIterA(i, 0);
+                    auto gB = gIterB(0, j);
+                    TLOAD(tA, gA);
+                    TLOAD(tBLocal, gB);
+                    tileBShared tBShared = TMOV_L2S_PUBLISH(tBLocal);
+                    TMATMUL(tC, tA, tBShared);
+                }
+
+                // Temporarily retained as load-only code so the original loop
+                // structure remains visible during the Shared B experiment.
+                for (int k = 1; k < Kb - 1; ++k) {
+                    tileA tA;
+                    tileBLocal tBLocal;
+                    auto gA = gIterA(i, k);
+                    auto gB = gIterB(k, j);
+                    TLOAD(tA, gA);
+                    TLOAD(tBLocal, gB);
+                    // TMATMUL_ACC(tCout, tA, tB);
+                }
+
+                // Keep the final load in place while disabling FIXP.
+                {
+                    tileA tA;
+                    tileBLocal tBLocal;
+                    auto gA = gIterA(i, Kb - 1);
+                    auto gB = gIterB(Kb - 1, j);
+                    TLOAD(tA, gA);
+                    TLOAD(tBLocal, gB);
+                    // TMATMUL_ACC_FIXP(tCout, tA, tB, fixp::keep_acc());
+                }
+            }
+
+            // Compile-only experiment: tC currently contains only k=0.
+            auto gC = gIterC(i, j);
+            TSTORE(gC, tC);
+        }
+    }
+}
+
+int main() {
+    using dtype = float;
+    constexpr int kPeNum = 4;
+
+    static_assert(globM % kPeNum == 0,
+                  "global M must be divisible by the PE count");
+
+    dtype src0p[Batch * globM * globK + 2 * ALIGN];
+    dtype src1p[Batch * globK * globN + 2 * ALIGN];
+    float dstp[Batch * globM * globN + 2 * ALIGN];
+
+    dtype *src0 =
+        (dtype *)(((uint64_t)src0p & ALIGN_MASK) + ALIGN);
+    dtype *src1 =
+        (dtype *)(((uint64_t)src1p & ALIGN_MASK) + ALIGN);
+    float *dst =
+        (float *)(((uint64_t)dstp & ALIGN_MASK) + ALIGN);
+
+#ifdef RES_CHECK
+#define SRC0_PATH CHK_DIR "/src0.bin"
+#define SRC1_PATH CHK_DIR "/src1.bin"
+    readBinaryFile(SRC0_PATH, (uint8_t *)src0,
+                   Batch * globM * globK * sizeof(dtype));
+    readBinaryFile(SRC1_PATH, (uint8_t *)src1,
+                   Batch * globK * globN * sizeof(dtype));
+#endif
+
+    BENCHSTART;
+    for (int b = 0; b < Batch; ++b) {
+        // src0/dst contain four consecutive PE matrices. The kernel receives
+        // the PE-local M dimension and uses tid to select one complete matrix.
+        matmul_multithread<dtype, globM / kPeNum, globN, globK, tilM, tilN,
+                           tilK>(
+            dst + b * globM * globN,
+            src0 + b * globM * globK,
+            src1 + b * globK * globN);
+    }
+    BENCHEND;
+
+#ifdef RES_CHECK
+#define RES_PATH CHK_DIR "/res.bin"
+    writeBinaryFile(RES_PATH, (uint8_t *)dst,
+                    Batch * globM * globN * sizeof(float));
+#endif
+
+    return 0;
+}

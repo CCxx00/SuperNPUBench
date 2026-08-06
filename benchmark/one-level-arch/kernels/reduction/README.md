@@ -261,6 +261,12 @@ for(int i = 0; i < 381; i++) {
   - Specialized for 3D tensors with non-power-of-2 dimensions
   - Uses zero-padding and layout transformation
 
+- **PTO variants**: `*_pto.hpp` alongside each base file
+  - Pure tile-op implementation (no `__vec__`/SIMT)
+  - Uses `TCOLSUM`/`TROWSUM`/`TCOLMAX`/`TROWMAX` reductions
+  - Sequential `TADD`/`TMAX` accumulation (no tree)
+  - Single-tree variants use `TCVT` + final reduction instead of `TINSERT`
+
 ## Performance Considerations
 
 1. **Tile Size Selection**: Choose `tM` and `tN` to balance parallelism and memory usage
@@ -271,7 +277,8 @@ for(int i = 0; i < 381; i++) {
 ## Dependencies
 
 - `common/pto_tileop.hpp`: PTO framework for tile operations
-- `template_asm.h`: Assembly-level vector operations
+- `*_pto.hpp` variants: pure tile-op (no `template_asm.h` dependency)
+- `template_asm.h`: Assembly-level operations (used by some non-PTO variants only)
 - `fileop.h`: File I/O utilities for testing
 
 ## References

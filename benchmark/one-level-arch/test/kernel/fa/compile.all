@@ -21,8 +21,20 @@ make TESTCASE=fa_2d_unroll Sq=256 Skv=512 Tm=16 Tk=32 X=2 Y=4
 make TESTCASE=fa_2d_unroll Sq=512 Skv=512 Tm=16 Tk=32 X=2 Y=4
 
 # ============================================
+# sfa: sparse (block-sparse / local-window) flash attention
+# ============================================
+make TESTCASE=sfa Sq=256 Skv=512 Tm=16 Tk=32
+make TESTCASE=sfa Sq=512 Skv=512 Tm=16 Tk=32
+
+# ============================================
+# fa_softmax_pto: PTO softmax flash attention
+# ============================================
+make TESTCASE=fa_softmax_pto Sq=256 Skv=512 Tm=16 Tk=32
+make TESTCASE=fa_softmax_pto Sq=512 Skv=512 Tm=16 Tk=32
+
+# ============================================
 # fa_HIF4_HIF4: HIF4 quantized flash attention
 # ============================================
-make TESTCASE=fa_HIF4_HIF4 MODE=BF16_NOGATHER Sq=256 Skv=512 Tm=16 Tk=32 X=1 Y=1
-# make TESTCASE=fa_HIF4_HIF4 MODE=BF16x2 Sq=256 Skv=512 Tm=16 Tk=32 X=1 Y=1
-# make TESTCASE=fa_HIF4_HIF4 MODE=BF16x2_NOGATHER Sq=256 Skv=512 Tm=16 Tk=32 X=1 Y=1
+make TESTCASE=fa_HIF4_HIF4 MODE=BF16_NOGATHER Sq=256 Skv=512 Tm=8 Tk=32 X=1 Y=1
+# make TESTCASE=fa_HIF4_HIF4 MODE=BF16x2 Sq=256 Skv=512 Tm=8 Tk=32 X=1 Y=1
+# make TESTCASE=fa_HIF4_HIF4 MODE=BF16x2_NOGATHER Sq=256 Skv=512 Tm=8 Tk=32 X=1 Y=1

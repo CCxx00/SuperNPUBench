@@ -1,3 +1,6 @@
+template <typename E_, int R_, int C_, int VR_=R_, int VC_=C_>
+using TileAcc = pto::Tile<pto::Location::Vec, E_, R_, C_, pto::BLayout::RowMajor, VR_, VC_>;
+
 // =============================================================================
 // multilayer_recompute_pto.hpp — 多层重算 GEMM 累加链（tile 版）
 // =============================================================================
@@ -22,7 +25,6 @@
 // 【算法步骤】
 //   首层: TLOAD(A0)+TLOAD(B0)→TMATMUL(acc, A0, B0)   （acc 清零起算）
 //   每后续层 l: TLOAD(A_l)+TLOAD(B_l)→TMATMUL_ACC(acc, A_l, B_l)  （acc += A_l*B_l）
-//   末尾: ACCCVT(out, acc)→TSTORE
 // =============================================================================
 #ifndef SUPERNPU_MULTILAYER_RECOMPUTE_PTO_HPP
 #define SUPERNPU_MULTILAYER_RECOMPUTE_PTO_HPP
@@ -65,11 +67,10 @@ void multilayer_recompute(float *initial_residual, float *const *comb_mix_ptrs,
         auto ga = it_m(const_cast<float*>(comb_mix_ptrs[l]))(0, 0);
         auto gb = it_r(const_cast<float*>(layer_input_ptrs[l]))(0, 0);
         TLOAD(a, ga); TLOAD(b, gb);
-        TMATMUL_ACC(acc, a, b);                        // acc += A_l * B_l
+        TMATMUL_ACC(acc, acc, a, b);                        // acc += A_l * B_l
     }
     auto gout = out_iter(0, 0);
     tile_out o;
-    ACCCVT(o, acc);                                    // ACC → 普通 tile（导出）
     TSTORE(gout, o);
 }
 

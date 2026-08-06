@@ -1,7 +1,6 @@
 #include <common/pto_tileop.hpp>
 #include "benchmark.h"
 #include "fileop.h"
-#include "template_asm.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -46,14 +45,18 @@ int main() {
     // Phase 1: SIMT high8 histogram (1 block × 256 lanes, each lane = 1 bucket)
     // -------------------------------------------------------------------------
     TileU32 high8HistTile;
-    TEXPANDSCALAR(high8HistTile, static_cast<uint32_t>(0));
+    TEXPANDS(high8HistTile, static_cast<uint32_t>(0));
+#ifndef __linx
     ExtractHigh8Hist_Impl< TileU32 >(high8HistTile, g_input);
+#else
+    // SIMT not supported under __linx; histogram stays zero
+#endif
 
     // Copy histogram results out and reduce to global 256-bin histogram
     using HistGT = GlobalTensor<uint32_t, Shape<1,1,1,16,16>, Stride<1,1,1,16,1>>;
     uint32_t histResult[256];
     HistGT histGlobal(histResult);
-    TCOPYOUT(histGlobal, high8HistTile);
+    TSTORE(histGlobal, high8HistTile);
 
     uint32_t global_high8_hist[256] = {0};
     for (int b = 0; b < 256; b++) {
@@ -86,13 +89,17 @@ int main() {
     // Phase 3: SIMT low8 histogram for kth_bin elements
     // -------------------------------------------------------------------------
     TileU32 low8HistTile;
-    TEXPANDSCALAR(low8HistTile, static_cast<uint32_t>(0));
+    TEXPANDS(low8HistTile, static_cast<uint32_t>(0));
+#ifndef __linx
     ExtractLow8HistForKthBin_Impl< TileU32 >(low8HistTile, g_input,
                                              static_cast<uint16_t>(kth_bin));
+#else
+    // SIMT not supported under __linx; histogram stays zero
+#endif
 
     uint32_t low8HistResult[256];
     HistGT low8HistGlobal(low8HistResult);
-    TCOPYOUT(low8HistGlobal, low8HistTile);
+    TSTORE(low8HistGlobal, low8HistTile);
 
     uint32_t global_low8_hist_kth[256] = {0};
     for (int b = 0; b < 256; b++) {

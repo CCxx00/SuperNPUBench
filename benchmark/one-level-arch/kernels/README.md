@@ -14,12 +14,12 @@ for type/dimension parameterization.
 - `matmul.hpp` — general matrix multiply; FP32/FP16/FP8; mask, dynamic, vec variants; A/B tile reuse.
 - `matmul_mx.hpp` — MX quantized matmul; FP4×FP4, BF16×FP4 mixed precision; microscaling factors.
 
-### 2. Flash Attention — `fa/`
-- `fa_2d_unroll.hpp` — 2D unroll (X/Y dims); seq len 256/512.
-- `fa_2d_unroll_pto.hpp` — 2D unroll, PTO tile-op variant.
-- `fa_unalign_2d_unroll.hpp` — unaligned boundary (seq len not a multiple of tile).
-- `fa_hif4.hpp` — HIF4 quantized.
-- `fa_dcore.hpp` — DCore-optimized.
+### 2. Flash Attention — `fa/` (see [`fa/README.md`](fa/README.md))
+- `fa_2d_unroll.hpp` / `fa_2d_unroll_pto.hpp` — 2D unroll (X/Y dims); seq len 256/512.
+- `fa_unalign_2d_unroll.hpp` / `fa_unalign_2d_unroll_pto.hpp` — unaligned boundary.
+- `fa_hif4.hpp` / `fa_hif4_pto.hpp` — HIF4 quantized.
+- `fa_dcore.hpp` / `fa_dcore_pto.hpp` — DCore-optimized.
+- `sfa_pto.hpp` — Sparse Flash Attention (block-sparse / CSR pattern), two-pass.
 - `fa_utils.h` / `fa_fp4_utils.h` — shared helpers.
 
 > Note: in `one-level-arch`, `*_pto.hpp` files are PTO-style variants kept
@@ -52,8 +52,14 @@ for type/dimension parameterization.
 - `hashtable_lookup_simd.hpp` — pure tile-op kernel (no SIMT). Runs on gfsim
   with `-s core.singleTierMode=true`.
 
-### 10. Sort — `sort/`
-- `topk.hpp` — Top-K.
+### 10. Sort — `sort/` (see [`sort/README.md`](sort/README.md))
+- `topk.hpp` / `topk_pto.hpp` — Top-K via radix-bucket histogram.
+
+### 11. DeepSeek 迁移算子 — `deepseek/` (see [`deepseek/README.md`](deepseek/README.md))
+- 19 个从 TileKernels (TileLang DSL) 迁移的 tile 版算子:
+  engram (2), mhc (5+1), moe (8+1), quant (3+2), transpose (1)
+- `_compile_test.cpp` 实例化全部 kernel 用于编译验证
+- 23 个独立测试用例 (每个 kernel 一个 ELF)
 
 ### Utils — `utils/`
 - `layout_transform.hpp` — ND→ZZ / ND→NN offset calculation.
