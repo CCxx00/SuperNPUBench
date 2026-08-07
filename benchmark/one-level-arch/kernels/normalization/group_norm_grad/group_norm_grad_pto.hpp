@@ -2,7 +2,8 @@
 // group_norm_grad_pto.hpp — GroupNorm backward, HxW > 1 (one-level PTO)
 // =============================================================================
 //
-// Matches PyTorch GroupNormBackwardKernelImplInternal (group_norm_kernel.cu):
+// Matches PyTorch GroupNormBackwardKernelImplInternal
+// (aten/src/ATen/native/cuda/group_norm_kernel.cu):
 //   1) Spatial reduce  ds/db = Σ_hw (dY*X), Σ_hw dY     per (n,c)
 //   2) Fused c2/c3     from ds/db over channels → workspace
 //   3) dX              = (rstd*gamma)*dY + c2*X + c3
@@ -15,7 +16,20 @@
 //   tile_hw <= 0 → min(HxW, tCap); spatial R-split when HxW > tile_hw.
 //   dX still requires HxW <= tCap (one spatial tile; RF-limited).
 //
-// tCap=128 (min TSize). Cols=1024 like rms_norm overflows Tile RF here.
+// tCap: logical tile >= 512B (TileOP IsValidActiveSize / TSize=1..7).
+//   fp16 → Cols>=256; fp32 → Cols>=128. tile_v is always fp32 → Cols=128.
+// Cols=1024 like rms_norm overflows Tile RF here.
+//
+// Torch CUDA launch 总览 (NVIDIA, warp=32):
+//   Step1 ComputeInternalGradientsCUDAKernel
+//     grid=N*C, block=(HxW<512)?32:512
+//   Step2 ComputeBackwardFusedParamsCUDAKernel
+//     grid=dim3(N,G), block=(D<512)?32:512
+//   Step3 dX gpu_kernel (+ optional c1)
+//     block=128, vt=4(fp16)/2(fp32), grid=ceil(numel/(128*vt))
+//   Step4 GammaBetaBackwardCUDAKernel1/2
+//     N<=128: grid=ceil(C/256), block=256
+//     N>128:  grid=ceil(C/32),  block=dim3(32,16)
 // =============================================================================
 #ifndef SUPERNPU_GROUP_NORM_GRAD_PTO_HPP
 #define SUPERNPU_GROUP_NORM_GRAD_PTO_HPP
@@ -37,6 +51,12 @@ inline int64_t workspace_elems(int64_t N, int64_t C, int64_t G) {
 
 // ---------------------------------------------------------------------------
 // Step 1: spatial reduce for one (n, c) → ds[nc], db[nc]  (HxW R-split)
+//
+// Torch: ComputeInternalGradientsCUDAKernel
+//   grid  = N * C          // 每个 (n,c) 一个 block；本函数 = 其中一个 block
+//   block = (HxW < 512) ? 32 : 512
+//   线程: threadIdx.x 沿 hw 做 grid-stride + warp/block reduce
+//   → ds[n,c]=Σ dY*X, db[n,c]=Σ dY
 // ---------------------------------------------------------------------------
 template <typename dtype, typename gm_h, typename gm_f, typename tile_h,
           typename tile_f, typename tile_v>
@@ -55,6 +75,8 @@ inline void spatial_reduce_nc(dtype *dy, dtype *x, float *ds, float *db,
     texpands(ds_acc, 0.0f);
     texpands(db_acc, 0.0f);
 
+    // Torch: for (hw = threadIdx.x; hw < HxW; hw += blockDim.x) + BlockReduce
+    // PTO: tile 覆盖一段 HxW，TROWSUM 代替 block 内线程归约
     for (int64_t hw0 = 0; hw0 < HxW; hw0 += tile_hw) {
         const size_t vh = static_cast<size_t>(
             (hw0 + tile_hw <= HxW) ? tile_hw : (HxW - hw0));
@@ -85,6 +107,12 @@ inline void spatial_reduce_nc(dtype *dy, dtype *x, float *ds, float *db,
 
 // ---------------------------------------------------------------------------
 // Step 2: fused c2/c3 for one (n, g) → c2[ng], c3[ng]
+//
+// Torch: ComputeBackwardFusedParamsCUDAKernel
+//   grid  = dim3(N, G)     // blockIdx.x=n, blockIdx.y=g；本函数 = 其中一个
+//   block = (D < 512) ? 32 : 512
+//   线程: threadIdx.x 沿 group 内通道 i∈[0,D) stride，再 block reduce
+//   → c2,c3 每 (n,g) 各一个标量
 // ---------------------------------------------------------------------------
 template <typename dtype, typename gm_h, typename gm_f, typename tile_h,
           typename tile_f, typename tile_v>
@@ -126,11 +154,13 @@ inline void fused_params_group(dtype *gamma, float *mean, float *rstd,
         TCVT(gamma_f, h0);
     }
 
+    // Torch: threads 各算 ds*gamma / db*gamma 再 reduce → sum1/sum2
     TMUL(t0, ds_f, gamma_f);
     TROWSUM(sum1, t0);
     TMUL(t0, db_f, gamma_f);
     TROWSUM(sum2, t0);
 
+    // c2/c3 由 block 内 thread 0（归约后）写出；此处标量 tile 完成同样公式
     TMUL(c2, sum2, mean_t);
     tsub(c2, c2, sum1);
     TMUL(c3, rstd_t, rstd_t);
@@ -150,6 +180,13 @@ inline void fused_params_group(dtype *gamma, float *mean, float *rstd,
 
 // ---------------------------------------------------------------------------
 // Step 3: dX for one (n, c) using stored c2/c3 and rstd*gamma
+//
+// Torch: gpu_kernel 元素级 (可选先算 c1)
+//   block = 128
+//   vt    = 4 (fp16/bf16) / 2 (fp32+)
+//   grid  = ceil(numel / (128 * vt))   // numel = N*C*HxW
+//   线程: 线性下标覆盖全部元素；c2/c3 按 (n,g) 广播
+// 本函数一次处理一个 (n,c) 的整段 HxW（Tile 覆盖空间维）
 // ---------------------------------------------------------------------------
 template <typename dtype, typename gm_h, typename gm_f, typename tile_h,
           typename tile_f, typename tile_v>
@@ -186,6 +223,7 @@ inline void dx_nc(dtype *dy, dtype *x, dtype *gamma, float *rstd, float *c2_buf,
     TLOAD(c2, gc2);
     TLOAD(c3, gc3);
 
+    // Torch 可选 c1 预计算同为 gpu_kernel block=128；此处 c1 = rstd*gamma[c]
     {
         gm_h gg(gamma + c, 1, 1);
         tile_h hg(1, 1);
@@ -205,7 +243,12 @@ inline void dx_nc(dtype *dy, dtype *x, dtype *gamma, float *rstd, float *c2_buf,
 }
 
 // ---------------------------------------------------------------------------
-// Step 4a: dbeta
+// Step 4a: dbeta  — dbeta[c] = Σ_n db[n,c]
+//
+// Torch: GammaBetaBackwardCUDAKernel1/2（与 dgamma 同一次 launch）
+//   N<=128: grid=ceil(C/256), block=256；每线程一个 c，循环 n
+//   N>128:  grid=ceil(C/32),  block=dim3(32,16)
+// 本函数按 group 一次写 D 个通道（对 N 串行累加）
 // ---------------------------------------------------------------------------
 template <typename dtype, typename gm_h, typename gm_f, typename tile_h,
           typename tile_f>
@@ -231,7 +274,9 @@ inline void dbeta_group(float *db, dtype *dbeta, int64_t N, int64_t C,
 }
 
 // ---------------------------------------------------------------------------
-// Step 4b: dgamma
+// Step 4b: dgamma — dgamma[c] = Σ_n (ds - db*mean)*rstd
+//
+// Torch: 与 dbeta 同 Kernel1/2 launch（见上）
 // ---------------------------------------------------------------------------
 template <typename dtype, typename gm_h, typename gm_f, typename tile_h,
           typename tile_f, typename tile_v>
@@ -277,11 +322,22 @@ inline void dgamma_group(float *ds, float *db, float *mean, float *rstd,
 
 // tiling: [N, C, G, HxW, tile_hw]
 // workspace: float[2*N*C + 2*N*G]
+//
+// 入口循环 ↔ Torch 各 kernel 的 grid 遍历：
+//   for n,c spatial_reduce  ↔ grid = N*C
+//   for n,g fused_params    ↔ grid = dim3(N,G)
+//   for n,c dx_nc           ↔ numel 上 gpu_kernel 线性网格
+//   for g  dbeta/dgamma     ↔ 按通道写回（Kernel1/2）
 template <typename dtype>
 void group_norm_grad(dtype *dy, dtype *x, float *mean, float *rstd,
                      dtype *gamma, const int64_t *tiling, dtype *dx,
                      dtype *dgamma, dtype *dbeta, float *workspace) {
-    constexpr int64_t tCap = 128;
+    // Capacity in elements: every Tile buffer >= 512B (dtype strip + float strip).
+    constexpr int64_t tCapDtype =
+        (512 + static_cast<int64_t>(sizeof(dtype)) - 1) /
+        static_cast<int64_t>(sizeof(dtype));
+    constexpr int64_t tCap = tCapDtype > 128 ? tCapDtype : 128;
+    constexpr int64_t tV = 128; // float scalar/broadcast strip: 128*4B = 512B
 
     const int64_t N = tiling[0];
     const int64_t C = tiling[1];
@@ -302,7 +358,8 @@ void group_norm_grad(dtype *dy, dtype *x, float *mean, float *rstd,
         Tile<Location::Vec, dtype, 1, tCap, BLayout::RowMajor, -1, -1>;
     using tile_f =
         Tile<Location::Vec, float, 1, tCap, BLayout::RowMajor, -1, -1>;
-    using tile_v = Tile<Location::Vec, float, 1, 32, BLayout::RowMajor, -1, 1>;
+    using tile_v =
+        Tile<Location::Vec, float, 1, tV, BLayout::RowMajor, -1, 1>;
 
     const float s = 1.0f / static_cast<float>(D * HxW);
 

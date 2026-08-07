@@ -25,7 +25,7 @@ inline void tadd(Tile &dst, Tile &src0, Tile &src1) {
         "B.DIM %2, 0, ->lb0\n"
         "B.DIM %3, 0, ->lb1\n"
         "B.DIM zero, %c4, ->lb2\n"
-        "B.IOT %5, %6, mask=15, TSize=%c7, last, ->%0\n"
+        "B.IOT %5, %6, mask=15, last, ->%0<%Z7>\n"
         ""
         : "=Tr"(dst.data())
         : "i"(type_traits<typename Tile::DType>::TypeCode),
@@ -46,7 +46,7 @@ inline void tsub(Tile &dst, Tile &src0, Tile &src1) {
         "B.DIM %2, 0, ->lb0\n"
         "B.DIM %3, 0, ->lb1\n"
         "B.DIM zero, %c4, ->lb2\n"
-        "B.IOT %5, %6, mask=15, TSize=%c7, last, ->%0\n"
+        "B.IOT %5, %6, mask=15, last, ->%0<%Z7>\n"
         ""
         : "=Tr"(dst.data())
         : "i"(type_traits<typename Tile::DType>::TypeCode),
@@ -68,7 +68,7 @@ inline void texpands(Tile &dst, typename Tile::DType s) {
         "B.DIM %2, 0, ->lb0\n"
         "B.DIM %3, 0, ->lb1\n"
         "B.DIM zero, %c4, ->lb2\n"
-        "B.IOT mask=15, TSize=%c5, last, ->%0\n"
+        "B.IOT mask=15, last, ->%0<%Z5>\n"
         "B.IOR [%6],[]\n"
         ""
         : "=Tr"(dst.data())
@@ -89,7 +89,7 @@ inline void trowexpandadd(TileOut &dst, Tile0 &src0, Tile1 &src1) {
         "B.DIM %2, 0, ->lb0\n"
         "B.DIM %3, 0, ->lb1\n"
         "B.DIM zero, %c4, ->lb2\n"
-        "B.IOT %5, %6, mask=15, TSize=%c7, last, ->%0\n"
+        "B.IOT %5, %6, mask=15, last, ->%0<%Z7>\n"
         ""
         : "=Tr"(dst.data())
         : "i"(type_traits<typename Tile0::DType>::TypeCode),

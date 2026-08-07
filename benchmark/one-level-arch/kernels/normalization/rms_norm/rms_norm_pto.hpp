@@ -95,8 +95,8 @@ void rms_norm(dtype *x, const int64_t *tiling, dtype *out, float eps = 1e-6f) {
     using gm_t = global_tensor<dtype, RowMajor<-1, -1>>;
     using tile_h = Tile<Location::Vec, dtype, tA, tR, BLayout::RowMajor, -1, -1>;
     using tile_f = Tile<Location::Vec, float, tA, tR, BLayout::RowMajor, -1, -1>;
-    // ValidCol=1; Cols=32 → 128B PE-local (TSize min).
-    using tile_v = Tile<Location::Vec, float, tA, 32, BLayout::RowMajor, -1, 1>;
+    // ValidCol=1; Cols=128 → 512B (TileOP IsValidActiveSize / TSize=1..7).
+    using tile_v = Tile<Location::Vec, float, tA, 128, BLayout::RowMajor, -1, 1>;
 
     const float inv_r = 1.0f / static_cast<float>(gR);
 
