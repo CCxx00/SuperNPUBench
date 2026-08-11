@@ -6,8 +6,8 @@
 #include "reduction/reducesum_colvec_pto.hpp"
 
 
-#ifndef DType
-#define DType int32_t
+#ifndef RDType
+#define RDType int32_t
 #endif
 
 #ifndef gIMs
@@ -34,7 +34,7 @@
 // main
 // ============================================================================
 int main() {
-    using dtype = DType;
+    using dtype = RDType;
 
     dtype input_buf[gIMs*gINs];
 //    dtype zero_buf[1*gIN];    
