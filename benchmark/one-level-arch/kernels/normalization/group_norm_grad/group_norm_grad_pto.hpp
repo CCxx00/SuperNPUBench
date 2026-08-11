@@ -34,16 +34,11 @@
 #ifndef SUPERNPU_GROUP_NORM_GRAD_PTO_HPP
 #define SUPERNPU_GROUP_NORM_GRAD_PTO_HPP
 
-#include "normalization/group_norm_grad/group_norm_grad_dyn_ops.hpp"
+#include <common/pto_tileop.hpp>
 
 #include <cstdint>
 
 namespace gn_grad {
-
-using gn_grad_dyn::tadd;
-using gn_grad_dyn::texpands;
-using gn_grad_dyn::trowexpandadd;
-using gn_grad_dyn::tsub;
 
 inline int64_t workspace_elems(int64_t N, int64_t C, int64_t G) {
     return 2 * N * C + 2 * N * G;
@@ -72,8 +67,8 @@ inline void spatial_reduce_nc(dtype *dy, dtype *x, float *ds, float *db,
     tile_v ds_acc(1);
     tile_v db_acc(1);
     tile_v cur(1);
-    texpands(ds_acc, 0.0f);
-    texpands(db_acc, 0.0f);
+    TEXPANDS(ds_acc, 0.0f);
+    TEXPANDS(db_acc, 0.0f);
 
     // Torch: for (hw = threadIdx.x; hw < HxW; hw += blockDim.x) + BlockReduce
     // PTO: tile 覆盖一段 HxW，TROWSUM 代替 block 内线程归约
@@ -96,9 +91,9 @@ inline void spatial_reduce_nc(dtype *dy, dtype *x, float *ds, float *db,
         TCVT(dy_f, h0);
         TMUL(prod, dy_f, x_f);
         TROWSUM(cur, prod);
-        tadd(ds_acc, ds_acc, cur);
+        TADD(ds_acc, ds_acc, cur);
         TROWSUM(cur, dy_f);
-        tadd(db_acc, db_acc, cur);
+        TADD(db_acc, db_acc, cur);
     }
 
     TSTORE(gds, ds_acc);
@@ -162,7 +157,7 @@ inline void fused_params_group(dtype *gamma, float *mean, float *rstd,
 
     // c2/c3 由 block 内 thread 0（归约后）写出；此处标量 tile 完成同样公式
     TMUL(c2, sum2, mean_t);
-    tsub(c2, c2, sum1);
+    TSUB(c2, c2, sum1);
     TMUL(c3, rstd_t, rstd_t);
     TMUL(c3, c3, rstd_t);
     TMUL(c2, c2, c3);
@@ -172,7 +167,7 @@ inline void fused_params_group(dtype *gamma, float *mean, float *rstd,
     TMULS(c3, c3, -1.0f);
     TMUL(sum1, sum2, rstd_t);
     TMULS(sum1, sum1, s);
-    tsub(c3, c3, sum1);
+    TSUB(c3, c3, sum1);
 
     TSTORE(gc2, c2);
     TSTORE(gc3, c3);
@@ -235,8 +230,8 @@ inline void dx_nc(dtype *dy, dtype *x, dtype *gamma, float *rstd, float *c2_buf,
 
     TROWEXPANDMUL(dx_f, dy_f, c1);
     TROWEXPANDMUL(tmp, x_f, c2);
-    tadd(dx_f, dx_f, tmp);
-    trowexpandadd(dx_f, dx_f, c3);
+    TADD(dx_f, dx_f, tmp);
+    TROWEXPANDADD(dx_f, dx_f, c3);
 
     TCVT(h0, dx_f);
     TSTORE(gdx, h0);
@@ -260,12 +255,12 @@ inline void dbeta_group(float *db, dtype *dbeta, int64_t N, int64_t C,
     tile_f acc(1, active_d);
     tile_f cur(1, active_d);
     tile_h h0(1, active_d);
-    texpands(acc, 0.0f);
+    TEXPANDS(acc, 0.0f);
 
     for (int64_t n = 0; n < N; ++n) {
         gm_f gdb(db + n * C + c0, 1, static_cast<int>(C));
         TLOAD(cur, gdb);
-        tadd(acc, acc, cur);
+        TADD(acc, acc, cur);
     }
 
     gm_h gout(dbeta + c0, 1, static_cast<int>(C));
@@ -293,7 +288,7 @@ inline void dgamma_group(float *ds, float *db, float *mean, float *rstd,
     tile_h h0(1, active_d);
     tile_v mean_t(1);
     tile_v rstd_t(1);
-    texpands(acc, 0.0f);
+    TEXPANDS(acc, 0.0f);
 
     for (int64_t n = 0; n < N; ++n) {
         const int64_t ng = n * G + g;
@@ -308,9 +303,9 @@ inline void dgamma_group(float *ds, float *db, float *mean, float *rstd,
         TLOAD(rstd_t, grstd);
 
         TROWEXPANDMUL(t0, db_f, mean_t);
-        tsub(t0, ds_f, t0);
+        TSUB(t0, ds_f, t0);
         TROWEXPANDMUL(t0, t0, rstd_t);
-        tadd(acc, acc, t0);
+        TADD(acc, acc, t0);
     }
 
     gm_h gout(dgamma + c0, 1, static_cast<int>(C));

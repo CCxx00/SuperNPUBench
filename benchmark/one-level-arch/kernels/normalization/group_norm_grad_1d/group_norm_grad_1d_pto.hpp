@@ -31,16 +31,11 @@
 #ifndef SUPERNPU_GROUP_NORM_GRAD_1D_PTO_HPP
 #define SUPERNPU_GROUP_NORM_GRAD_1D_PTO_HPP
 
-#include "normalization/group_norm_grad/group_norm_grad_dyn_ops.hpp"
+#include <common/pto_tileop.hpp>
 
 #include <cstdint>
 
 namespace gn_grad_1d {
-
-using gn_grad_dyn::tadd;
-using gn_grad_dyn::texpands;
-using gn_grad_dyn::trowexpandadd;
-using gn_grad_dyn::tsub;
 
 // ---------------------------------------------------------------------------
 // Stage A1: channel reduce → c2/c3 for one (n, g)
@@ -105,7 +100,7 @@ inline void fused_params_group(dtype *dy, dtype *x, float *mean, float *rstd,
 
     // c2 = (sum2*mean - sum1) * rstd^3 * s   （归约后标量，通常 thread0 写）
     TMUL(c2, sum2, mean_t);
-    tsub(c2, c2, sum1);
+    TSUB(c2, c2, sum1);
     TMUL(c3, rstd_t, rstd_t);
     TMUL(c3, c3, rstd_t);
     TMUL(c2, c2, c3);
@@ -116,7 +111,7 @@ inline void fused_params_group(dtype *dy, dtype *x, float *mean, float *rstd,
     TMULS(c3, c3, -1.0f);
     TMUL(sum1, sum2, rstd_t);
     TMULS(sum1, sum1, s);
-    tsub(c3, c3, sum1);
+    TSUB(c3, c3, sum1);
 
     TSTORE(gc2, c2);
     TSTORE(gc3, c3);
@@ -177,8 +172,8 @@ inline void dx_group(dtype *dy, dtype *x, float *rstd, dtype *gamma,
     TROWEXPANDMUL(t1, t0, rstd_t);
     TMUL(t1, t1, dy_f);
     TROWEXPANDMUL(t0, x_f, c2);
-    tadd(t1, t1, t0);
-    trowexpandadd(t1, t1, c3);
+    TADD(t1, t1, t0);
+    TROWEXPANDADD(t1, t1, c3);
 
     TCVT(h0, t1);
     TSTORE(gdx, h0);
@@ -204,7 +199,7 @@ inline void dbeta_group(dtype *dy, dtype *dbeta, int64_t N, int64_t C,
         tile_h h0(1, vd);
         tile_f dy_f(1, vd);
         tile_f acc(1, vd);
-        texpands(acc, 0.0f);
+        TEXPANDS(acc, 0.0f);
 
         // Torch Kernel1: 单线程 for(n) 累加；此处 Tile 一次累加一组通道
         for (int64_t n = 0; n < N; ++n) {
@@ -212,7 +207,7 @@ inline void dbeta_group(dtype *dy, dtype *dbeta, int64_t N, int64_t C,
                      static_cast<int>(C));
             TLOAD(h0, gdy);
             TCVT(dy_f, h0);
-            tadd(acc, acc, dy_f);
+            TADD(acc, acc, dy_f);
         }
 
         gm_h gdb(dbeta + c0 + d0, 1, static_cast<int>(C));
@@ -244,7 +239,7 @@ inline void dgamma_group(dtype *dy, dtype *x, float *mean, float *rstd,
         tile_f acc(1, vd);
         tile_v mean_t(1);
         tile_v rstd_t(1);
-        texpands(acc, 0.0f);
+        TEXPANDS(acc, 0.0f);
 
         for (int64_t n = 0; n < N; ++n) {
             const int64_t ng = n * G + g;
@@ -266,8 +261,8 @@ inline void dgamma_group(dtype *dy, dtype *x, float *mean, float *rstd,
             TMUL(t0, t0, dy_f);
             TROWEXPANDMUL(x_f, dy_f, mean_t);
             TROWEXPANDMUL(x_f, x_f, rstd_t);
-            tsub(t0, t0, x_f);
-            tadd(acc, acc, t0);
+            TSUB(t0, t0, x_f);
+            TADD(acc, acc, t0);
         }
 
         gm_h gdg(dgamma + c0 + d0, 1, static_cast<int>(C));

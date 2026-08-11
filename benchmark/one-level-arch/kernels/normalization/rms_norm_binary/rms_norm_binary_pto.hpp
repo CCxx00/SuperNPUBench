@@ -28,27 +28,6 @@ namespace rms_bin {
 constexpr int kWsCols = 128;
 constexpr int kMaxLevels = 6;
 
-template <typename Tile>
-inline void tadd(Tile &dst, Tile &src0, Tile &src1) {
-    const size_t valid_col = src0.GetValidCol();
-    const size_t valid_row = src0.GetValidRow();
-    asm volatile(
-        "BSTART.TEPL 0, %c1\n"
-        "B.DIM %2, 0, ->lb0\n"
-        "B.DIM %3, 0, ->lb1\n"
-        "B.DIM zero, %c4, ->lb2\n"
-        "B.IOT %5, %6, mask=15, last, ->%0<%Z7>\n"
-        ""
-        : "=Tr"(dst.data())
-        : "i"(type_traits<typename Tile::DType>::TypeCode),
-          "r"(valid_col),
-          "r"(valid_row),
-          "i"(Tile::Cols),
-          "Tr"(src0.data()),
-          "Tr"(src1.data()),
-          "i"(tile_type_traits<typename Tile::TileDType>::TilesizeCode));
-}
-
 inline int64_t GetCacheId(int64_t idx) {
     return static_cast<int64_t>(
         __builtin_ctzll(static_cast<unsigned long long>(idx + 1)));
@@ -150,7 +129,7 @@ void rms_norm_binary(dtype *x, const int64_t *tiling, dtype *out,
             TCVT(src1, src1_h);
             TMUL(sq0, src0, src0);
             TMUL(sq1, src1, src1);
-            rms_bin::tadd(sq0, sq0, sq1);
+            TADD(sq0, sq0, sq1);
             TROWSUM(cur, sq0);
             RMS_BIN_UPDATE_CACHE();
         }
@@ -174,7 +153,7 @@ void rms_norm_binary(dtype *x, const int64_t *tiling, dtype *out,
             TCVT(src1, src1_h);
             TMUL(sq0, src0, src0);
             TMUL(sq1, src1, src1);
-            rms_bin::tadd(sq0, sq0, sq1);
+            TADD(sq0, sq0, sq1);
             TROWSUM(cur, sq0);
             RMS_BIN_UPDATE_CACHE();
         }
