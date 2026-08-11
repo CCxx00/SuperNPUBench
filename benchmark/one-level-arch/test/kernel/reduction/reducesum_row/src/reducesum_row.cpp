@@ -9,8 +9,8 @@
 
 
 
-#ifndef DType
-#define DType int32_t
+#ifndef RDType
+#define RDType int32_t
 #endif
 
 #ifndef tMs
@@ -32,7 +32,7 @@
 // main
 // ============================================================================
 int main() {
-    using dtype = DType;
+    using dtype = RDType;
 
     dtype input[gIMs*gINs];
     dtype output[gIMs*1];
