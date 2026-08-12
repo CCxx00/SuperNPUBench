@@ -1,54 +1,54 @@
-# PTO ISA Tile 指令集整理
+# PTO ISA Tile Instruction Set Reference
 
-> 基于 [`pto-spec`](https://github.com/PTO-ISA/pto-spec) 仓库 `docs/tile/` 与 `asl/tile/` 形式化规范整理。覆盖 PTO ISA 0.58.0 的 109 条 tile 操作。每条指令在主表中带有内文锚点,可在附录 B 索引中点击跳转。
+> Generated from the [`pto-spec`](https://github.com/PTO-ISA/pto-spec) repository (`docs/tile/` and `asl/tile/` formal specification). Covers all 109 tile operations of PTO ISA 0.58.0. Each instruction row carries an in-document anchor; the index in Appendix B links to it.
 
-**快速跳转**: [附录 B 助记符索引](#附录-b-助记符索引) | [概览](#概览)
+**Quick navigation**: [Appendix B Mnemonic Index](#appendix-b-mnemonic-index) | [Overview](#overview)
 
-## 概览
+## Overview
 
-- **tile 操作总数**: 109 条
-- **七大数据类**:
+- **Total tile operations**: 109
+- **Seven semantic classes**:
 
-- <a id="elementwise-tile-tile"></a>[`elementwise-tile-tile`](#elementwise-tile-tile): 25 条 — Tile 与 Tile 逐元素运算(arithmetic/logical/transcendental/format-conversion)。两个源 tile 输入,一个目标 tile。
-- <a id="tile-scalar-and-immediate"></a>[`tile-scalar-and-immediate`](#tile-scalar-and-immediate): 15 条 — Tile 与标量/立即数的逐元素运算。一个源 tile 加一个标量/立即数输入,后缀 S 区分(如 TADD vs TADDS)。
-- <a id="reduce-and-expand"></a>[`reduce-and-expand`](#reduce-and-expand): 28 条 — 归约(row/column reduction)与扩展(row/column expansion)。归约把 tile 压缩为 1D 结果;扩展把 1D 广播到 2D。
-- <a id="memory-and-data-movement"></a>[`memory-and-data-movement`](#memory-and-data-movement): 9 条 — Tile 与主存间的数据搬运,含规则 TLOAD/TSTORE/TPREFETCH、不规则 MGATHER/MSCATTER、PE 间 GMOV。
-- <a id="matrix-and-matrix-vector"></a>[`matrix-and-matrix-vector`](#matrix-and-matrix-vector): 12 条 — 矩阵-矩阵和矩阵-向量乘法族(GEMM/GEMV),含 MX(混合精度)、ACC(累加)、BIAS(偏置融合)变体。
-- <a id="layout-and-rearrangement"></a>[`layout-and-rearrangement`](#layout-and-rearrangement): 7 条 — Tile 布局重排与初始化,含转置、拼接、插入、抽取、im2col、填充、移动。
-- <a id="irregular-and-complex"></a>[`irregular-and-complex`](#irregular-and-complex): 13 条 — 不规则/复杂操作,含量化、直方图、三角化、排序/归并排序、scatter/gather、partition。
+- <a id="elementwise-tile-tile"></a>[`elementwise-tile-tile`](#elementwise-tile-tile): 25 ops — Elementwise Tile-Tile operations (arithmetic / logical / transcendental / format-conversion). Two source tiles in, one destination tile out.
+- <a id="tile-scalar-and-immediate"></a>[`tile-scalar-and-immediate`](#tile-scalar-and-immediate): 15 ops — Elementwise Tile-Scalar/Immediate operations. One source tile plus a scalar/immediate operand; the trailing `S` distinguishes these from the Tile-Tile form (e.g. TADD vs TADDS).
+- <a id="reduce-and-expand"></a>[`reduce-and-expand`](#reduce-and-expand): 28 ops — Reductions (row/column reduction) and expansions (row/column expansion). Reductions collapse a tile to a 1D result; expansions broadcast a 1D source to a 2D tile.
+- <a id="memory-and-data-movement"></a>[`memory-and-data-movement`](#memory-and-data-movement): 9 ops — Data movement between tiles and main memory: regular TLOAD/TSTORE/TPREFETCH, irregular MGATHER/MSCATTER, and PE-to-PE GMOV.
+- <a id="matrix-and-matrix-vector"></a>[`matrix-and-matrix-vector`](#matrix-and-matrix-vector): 12 ops — Matrix-Matrix and Matrix-Vector multiply family (GEMM/GEMV) with MX (mixed precision), ACC (accumulate), and BIAS (bias-fused) variants.
+- <a id="layout-and-rearrangement"></a>[`layout-and-rearrangement`](#layout-and-rearrangement): 7 ops — Tile layout rearrangement and initialization: transpose, concat, insert, extract, im2col, fill, move.
+- <a id="irregular-and-complex"></a>[`irregular-and-complex`](#irregular-and-complex): 13 ops — Irregular/complex operations: quantization, histogram, triangularization, sort/merge-sort, scatter/gather, partition.
 
-- **四种执行引擎**:
+- **Four execution engines**:
 
-  - `VEC` (向量引擎): 35 条
-  - `SFU` (标量功能单元): 52 条
-  - `CUBE` (Cube 立方体引擎): 12 条
-  - `TLSU` (Tile Load/Store 单元): 10 条
+  - `VEC` (Vector engine): 35 ops
+  - `SFU` (Scalar Functional Unit): 52 ops
+  - `CUBE` (Cube engine): 12 ops
+  - `TLSU` (Tile Load/Store Unit): 10 ops
 
-- **编码载体**: TEPL 二进制 carrier(对应 `BSTART.VEC`/`BSTART.SFU`/`C.BSTART`),CUBE 走 Local C/D 立方体编码
-- **tile 寄存器**: 64 个 flat T/U/M/N tiles,128 字节 CELL,B.IOT 分配 128B–8KiB
-- **bundle 模型**: 每条 tile 指令必须包裹在 `BSTART.<engine> <MNEMONIC>, DataType` / `B.DIM` / `B.IOT` / `BSTOP` 之间
+- **Encoding carrier**: TEPL binary carrier (selected via `BSTART.VEC` / `BSTART.SFU` / `C.BSTART`); CUBE uses the Local C/D cube encoding.
+- **Tile registers**: 64 flat T/U/M/N tiles, 128-byte CELL, B.IOT allocation 128 B – 8 KiB.
+- **Bundle model**: every tile instruction is wrapped in `BSTART.<engine> <MNEMONIC>, DataType` / `B.DIM` / `B.IOT` / `BSTOP`.
 
-## 每条指令的查阅入口
+## Per-instruction lookup fields
 
-| 字段 | 含义 |
+| Field | Meaning |
 | --- | --- |
-| 助记符 | 操作名(如 `TADD`),带内文锚点 |
-| 摘要 | 来自 `PTO-INSTRUCTION` JSON `summary` 字段 |
-| 引擎 | VEC/SFU/CUBE/TLSU |
-| 选择子 | TEPL `selector`(3 位十六进制)或 CUBE `function`/`mode` |
-| 处理器 | ASL `semantic_handler` |
-| 操作数 | `destination0/source0/source1` 等角色 |
-| ASL / Doc | 指向 pto-spec 仓库的规范源与镜像页(绝对 URL) |
+| Mnemonic | Operation name (e.g. `TADD`), with an in-document anchor |
+| Summary | From the `PTO-INSTRUCTION` JSON `summary` field |
+| Engine | VEC / SFU / CUBE / TLSU |
+| Selector | TEPL `selector` (3-digit hex) or CUBE `function`/`mode` |
+| Handler | ASL `semantic_handler` |
+| Operands | Roles such as `destination0`/`source0`/`source1` |
+| ASL / Doc | Absolute URLs to the pto-spec normative source and mirror page |
 
 ---
 
 ## <a id="elementwise-tile-tile-section"></a>elementwise-tile-tile
 
-Tile 与 Tile 逐元素运算(arithmetic/logical/transcendental/format-conversion)。两个源 tile 输入,一个目标 tile。
+Elementwise Tile-Tile operations (arithmetic / logical / transcendental / format-conversion). Two source tiles in, one destination tile out.
 
 ### <a id="elementwise-tile-tile-arithmetic"></a>arithmetic
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tadd"></a>`TADD` | Apply elementwise addition to the two source Tiles. | VEC | 0x000 |  | `ExecuteTileBinary` | destination0=destination, source0=source-left, source1=source-right | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/elementwise-tile-tile/arithmetic/TADD.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/elementwise-tile-tile/arithmetic/TADD.md) |
 | <a id="tfma"></a>`TFMA` | Compute a fused elementwise left-times-right plus addend result. | VEC | 0x01C |  | `TFMA` | destination0=destination, source0=multiplicand-left, source1=multiplicand-right, source2=addend | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/elementwise-tile-tile/arithmetic/TFMA.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/elementwise-tile-tile/arithmetic/TFMA.md) |
@@ -59,13 +59,13 @@ Tile 与 Tile 逐元素运算(arithmetic/logical/transcendental/format-conversio
 
 ### <a id="elementwise-tile-tile-format-conversion"></a>format-conversion
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tcvt"></a>`TCVT` | Convert source elements to the destination data type under rounding and saturation controls. | VEC | 0x01B |  | `TCVT` | destination0=destination, source0=source, numeric_control=rounding-and-saturation | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/elementwise-tile-tile/format-conversion/TCVT.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/elementwise-tile-tile/format-conversion/TCVT.md) |
 
 ### <a id="elementwise-tile-tile-logical"></a>logical
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tabs"></a>`TABS` | Apply elementwise absolute value to the source Tile. | VEC | 0x00F |  | `ExecuteTileUnary` | destination0=destination, source0=source | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/elementwise-tile-tile/logical/TABS.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/elementwise-tile-tile/logical/TABS.md) |
 | <a id="tand"></a>`TAND` | Apply elementwise bitwise AND to the two source Tiles. | VEC | 0x006 |  | `ExecuteTileBinary` | destination0=destination, source0=source-left, source1=source-right | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/elementwise-tile-tile/logical/TAND.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/elementwise-tile-tile/logical/TAND.md) |
@@ -81,7 +81,7 @@ Tile 与 Tile 逐元素运算(arithmetic/logical/transcendental/format-conversio
 
 ### <a id="elementwise-tile-tile-transcendental"></a>transcendental
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tdiv"></a>`TDIV` | Apply elementwise division to the two source Tiles. | VEC | 0x003 |  | `ExecuteTileBinary` | destination0=destination, source0=source-left, source1=source-right | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/elementwise-tile-tile/transcendental/TDIV.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/elementwise-tile-tile/transcendental/TDIV.md) |
 | <a id="texp"></a>`TEXP` | Apply elementwise exponential to the source Tile. | SFU | 0x012 |  | `ExecuteTileUnary` | destination0=destination, source0=source | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/elementwise-tile-tile/transcendental/TEXP.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/elementwise-tile-tile/transcendental/TEXP.md) |
@@ -93,11 +93,11 @@ Tile 与 Tile 逐元素运算(arithmetic/logical/transcendental/format-conversio
 
 ## <a id="tile-scalar-and-immediate-section"></a>tile-scalar-and-immediate
 
-Tile 与标量/立即数的逐元素运算。一个源 tile 加一个标量/立即数输入,后缀 S 区分(如 TADD vs TADDS)。
+Elementwise Tile-Scalar/Immediate operations. One source tile plus a scalar/immediate operand; the trailing `S` distinguishes these from the Tile-Tile form (e.g. TADD vs TADDS).
 
 ### <a id="tile-scalar-and-immediate-arithmetic"></a>arithmetic
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tadds"></a>`TADDS` | Apply elementwise addition between the source Tile and bound scalar. | VEC | 0x020 |  | `ExecuteTileScalar` | destination0=destination, source0=source, scalar0=scalar | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/tile-scalar-and-immediate/arithmetic/TADDS.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/tile-scalar-and-immediate/arithmetic/TADDS.md) |
 | <a id="tdivs"></a>`TDIVS` | Apply elementwise division between the source Tile and bound scalar. | VEC | 0x023 |  | `ExecuteTileScalar` | destination0=destination, source0=source, scalar0=scalar | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/tile-scalar-and-immediate/arithmetic/TDIVS.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/tile-scalar-and-immediate/arithmetic/TDIVS.md) |
@@ -109,13 +109,13 @@ Tile 与标量/立即数的逐元素运算。一个源 tile 加一个标量/立�
 
 ### <a id="tile-scalar-and-immediate-initialization"></a>initialization
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="texpands"></a>`TEXPANDS` | Fill the destination Tile by expanding the bound scalar value. | VEC | 0x03B |  | `ExecuteTileFillScalar` | destination0=destination, scalar0=scalar | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/tile-scalar-and-immediate/initialization/TEXPANDS.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/tile-scalar-and-immediate/initialization/TEXPANDS.md) |
 
 ### <a id="tile-scalar-and-immediate-logical"></a>logical
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tands"></a>`TANDS` | Apply elementwise bitwise AND between the source Tile and bound scalar. | VEC | 0x026 |  | `ExecuteTileScalar` | destination0=destination, source0=source, scalar0=scalar | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/tile-scalar-and-immediate/logical/TANDS.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/tile-scalar-and-immediate/logical/TANDS.md) |
 | <a id="tcmps"></a>`TCMPS` | Apply elementwise comparison between the source Tile and bound scalar. | VEC | 0x02D |  | `ExecuteTileCompareScalar` | destination0=destination, source0=source, scalar0=scalar, comparison=comparison | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/tile-scalar-and-immediate/logical/TCMPS.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/tile-scalar-and-immediate/logical/TCMPS.md) |
@@ -127,11 +127,11 @@ Tile 与标量/立即数的逐元素运算。一个源 tile 加一个标量/立�
 
 ## <a id="reduce-and-expand-section"></a>reduce-and-expand
 
-归约(row/column reduction)与扩展(row/column expansion)。归约把 tile 压缩为 1D 结果;扩展把 1D 广播到 2D。
+Reductions (row/column reduction) and expansions (row/column expansion). Reductions collapse a tile to a 1D result; expansions broadcast a 1D source to a 2D tile.
 
 ### <a id="reduce-and-expand-column-expansion"></a>column-expansion
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tcolexpand"></a>`TCOLEXPAND` | Apply broadcast while expanding the bound col vector across the source Tile. | SFU | 0x054 |  | `ExecuteTileExpand` | destination0=destination, source0=source, source1=broadcast-source | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/reduce-and-expand/column-expansion/TCOLEXPAND.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/reduce-and-expand/column-expansion/TCOLEXPAND.md) |
 | <a id="tcolexpandadd"></a>`TCOLEXPANDADD` | Apply addition while expanding the bound col vector across the source Tile. | SFU | 0x055 |  | `ExecuteTileExpand` | destination0=destination, source0=source, source1=broadcast-source | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/reduce-and-expand/column-expansion/TCOLEXPANDADD.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/reduce-and-expand/column-expansion/TCOLEXPANDADD.md) |
@@ -144,7 +144,7 @@ Tile 与标量/立即数的逐元素运算。一个源 tile 加一个标量/立�
 
 ### <a id="reduce-and-expand-column-reduction"></a>column-reduction
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tcolargmax"></a>`TCOLARGMAX` | Reduce each source col to its maximum index. | SFU | 0x05C |  | `ExecuteTileReduction` | destination0=destination, source0=source | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/reduce-and-expand/column-reduction/TCOLARGMAX.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/reduce-and-expand/column-reduction/TCOLARGMAX.md) |
 | <a id="tcolargmin"></a>`TCOLARGMIN` | Reduce each source col to its minimum index. | SFU | 0x05D |  | `ExecuteTileReduction` | destination0=destination, source0=source | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/reduce-and-expand/column-reduction/TCOLARGMIN.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/reduce-and-expand/column-reduction/TCOLARGMIN.md) |
@@ -155,7 +155,7 @@ Tile 与标量/立即数的逐元素运算。一个源 tile 加一个标量/立�
 
 ### <a id="reduce-and-expand-row-expansion"></a>row-expansion
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="trowexpand"></a>`TROWEXPAND` | Apply broadcast while expanding the bound row vector across the source Tile. | SFU | 0x044 |  | `ExecuteTileExpand` | destination0=destination, source0=source, source1=broadcast-source | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/reduce-and-expand/row-expansion/TROWEXPAND.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/reduce-and-expand/row-expansion/TROWEXPAND.md) |
 | <a id="trowexpandadd"></a>`TROWEXPANDADD` | Apply addition while expanding the bound row vector across the source Tile. | SFU | 0x045 |  | `ExecuteTileExpand` | destination0=destination, source0=source, source1=broadcast-source | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/reduce-and-expand/row-expansion/TROWEXPANDADD.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/reduce-and-expand/row-expansion/TROWEXPANDADD.md) |
@@ -168,7 +168,7 @@ Tile 与标量/立即数的逐元素运算。一个源 tile 加一个标量/立�
 
 ### <a id="reduce-and-expand-row-reduction"></a>row-reduction
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="trowargmax"></a>`TROWARGMAX` | Reduce each source row to its maximum index. | SFU | 0x04C |  | `ExecuteTileReduction` | destination0=destination, source0=source | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/reduce-and-expand/row-reduction/TROWARGMAX.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/reduce-and-expand/row-reduction/TROWARGMAX.md) |
 | <a id="trowargmin"></a>`TROWARGMIN` | Reduce each source row to its minimum index. | SFU | 0x04D |  | `ExecuteTileReduction` | destination0=destination, source0=source | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/reduce-and-expand/row-reduction/TROWARGMIN.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/reduce-and-expand/row-reduction/TROWARGMIN.md) |
@@ -179,11 +179,11 @@ Tile 与标量/立即数的逐元素运算。一个源 tile 加一个标量/立�
 
 ## <a id="memory-and-data-movement-section"></a>memory-and-data-movement
 
-Tile 与主存间的数据搬运,含规则 TLOAD/TSTORE/TPREFETCH、不规则 MGATHER/MSCATTER、PE 间 GMOV。
+Data movement between tiles and main memory: regular TLOAD/TSTORE/TPREFETCH, irregular MGATHER/MSCATTER, and PE-to-PE GMOV.
 
 ### <a id="memory-and-data-movement-irregular"></a>irregular
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="mgather"></a>`MGATHER` | Gather GM elements at Tile-provided indices into the destination. | TLSU |  |  | `MGATHER` | destination0=destination, address=base-address, source0=indices | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/memory-and-data-movement/irregular/MGATHER.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/memory-and-data-movement/irregular/MGATHER.md) |
 | <a id="mgather_cas"></a>`MGATHER_CAS` | Atomically compare and conditionally replace GM elements at Tile-provided indices. | TLSU |  |  | `MGATHER_CAS` | destination0=destination, address=base-address, source0=indices, source1=expected, source2=replacement | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/memory-and-data-movement/irregular/MGATHER_CAS.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/memory-and-data-movement/irregular/MGATHER_CAS.md) |
@@ -193,13 +193,13 @@ Tile 与主存间的数据搬运,含规则 TLOAD/TSTORE/TPREFETCH、不规则 MG
 
 ### <a id="memory-and-data-movement-pe-movement"></a>pe-movement
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="gmov"></a>`GMOV` | Copy the resolved peer-PE Tile fragment selected by the bound peer TID. | TLSU |  |  | `GMOV` | destination0=destination, source0=resolved-peer-source, scalar0=peer-tid | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/memory-and-data-movement/pe-movement/GMOV.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/memory-and-data-movement/pe-movement/GMOV.md) |
 
 ### <a id="memory-and-data-movement-regular"></a>regular
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tload"></a>`TLOAD` | Load the valid GM rectangle into a Tile using the encoded base and logical row stride. | TLSU |  |  | `TLOAD` | destination0=destination, address=base-address, scalar0=row-stride-elements | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/memory-and-data-movement/regular/TLOAD.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/memory-and-data-movement/regular/TLOAD.md) |
 | <a id="tprefetch"></a>`TPREFETCH` | Prefetch the requested GM byte range without producing a Tile destination. | TLSU |  |  | `TPREFETCH` | address=base-address, byte_count=byte-count | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/memory-and-data-movement/regular/TPREFETCH.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/memory-and-data-movement/regular/TPREFETCH.md) |
@@ -207,11 +207,11 @@ Tile 与主存间的数据搬运,含规则 TLOAD/TSTORE/TPREFETCH、不规则 MG
 
 ## <a id="matrix-and-matrix-vector-section"></a>matrix-and-matrix-vector
 
-矩阵-矩阵和矩阵-向量乘法族(GEMM/GEMV),含 MX(混合精度)、ACC(累加)、BIAS(偏置融合)变体。
+Matrix-Matrix and Matrix-Vector multiply family (GEMM/GEMV) with MX (mixed precision), ACC (accumulate), and BIAS (bias-fused) variants.
 
 ### <a id="matrix-and-matrix-vector-matrix-matrix"></a>matrix-matrix
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tmatmul"></a>`TMATMUL` | Multiply the left and right matrices into the destination. | CUBE |  | 0/None | `TMATMUL` | destination0=destination, source0=left, source1=right | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/matrix-and-matrix-vector/matrix-matrix/TMATMUL.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/matrix-and-matrix-vector/matrix-matrix/TMATMUL.md) |
 | <a id="tmatmul_acc"></a>`TMATMUL_ACC` | Multiply matrices and accumulate into the supplied accumulator Tile. | CUBE |  | 2/None | `TMATMUL_ACC` | destination0=destination, source0=accumulator, source1=left, source2=right | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/matrix-and-matrix-vector/matrix-matrix/TMATMUL_ACC.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/matrix-and-matrix-vector/matrix-matrix/TMATMUL_ACC.md) |
@@ -222,7 +222,7 @@ Tile 与主存间的数据搬运,含规则 TLOAD/TSTORE/TPREFETCH、不规则 MG
 
 ### <a id="matrix-and-matrix-vector-matrix-vector"></a>matrix-vector
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tgemv"></a>`TGEMV` | Multiply the matrix by the vector into the destination. | CUBE |  | 16/None | `TGEMV` | destination0=destination, source0=matrix, source1=vector | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/matrix-and-matrix-vector/matrix-vector/TGEMV.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/matrix-and-matrix-vector/matrix-vector/TGEMV.md) |
 | <a id="tgemv_acc"></a>`TGEMV_ACC` | Multiply the matrix by the vector and accumulate into the supplied Tile. | CUBE |  | 18/None | `TGEMV_ACC` | destination0=destination, source0=accumulator, source1=matrix, source2=vector | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/matrix-and-matrix-vector/matrix-vector/TGEMV_ACC.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/matrix-and-matrix-vector/matrix-vector/TGEMV_ACC.md) |
@@ -233,17 +233,17 @@ Tile 与主存间的数据搬运,含规则 TLOAD/TSTORE/TPREFETCH、不规则 MG
 
 ## <a id="layout-and-rearrangement-section"></a>layout-and-rearrangement
 
-Tile 布局重排与初始化,含转置、拼接、插入、抽取、im2col、填充、移动。
+Tile layout rearrangement and initialization: transpose, concat, insert, extract, im2col, fill, move.
 
 ### <a id="layout-and-rearrangement-initialization"></a>initialization
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tfillpad"></a>`TFILLPAD` | Copy the source and fill destination padding elements with the bound scalar. | SFU | 0x065 |  | `TFILLPAD` | destination0=destination, source0=source, scalar0=padding | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/layout-and-rearrangement/initialization/TFILLPAD.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/layout-and-rearrangement/initialization/TFILLPAD.md) |
 
 ### <a id="layout-and-rearrangement-layout"></a>layout
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tconcat"></a>`TCONCAT` | Concatenate two source Tiles along the selected axis. | SFU | 0x060 |  | `TCONCAT` | destination0=destination, source0=source-left, source1=source-right, axis=axis | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/layout-and-rearrangement/layout/TCONCAT.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/layout-and-rearrangement/layout/TCONCAT.md) |
 | <a id="textract"></a>`TEXTRACT` | Extract a rectangular source region at the encoded row and column offsets. | SFU | 0x062 |  | `TEXTRACT` | destination0=destination, source0=source, natural0=row-offset, natural1=column-offset | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/layout-and-rearrangement/layout/TEXTRACT.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/layout-and-rearrangement/layout/TEXTRACT.md) |
@@ -254,18 +254,18 @@ Tile 布局重排与初始化,含转置、拼接、插入、抽取、im2col、�
 
 ## <a id="irregular-and-complex-section"></a>irregular-and-complex
 
-不规则/复杂操作,含量化、直方图、三角化、排序/归并排序、scatter/gather、partition。
+Irregular/complex operations: quantization, histogram, triangularization, sort/merge-sort, scatter/gather, partition.
 
 ### <a id="irregular-and-complex-format-conversion"></a>format-conversion
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tdequant"></a>`TDEQUANT` | Dequantize source elements using scale, zero point, rounding, and saturation controls. | SFU | 0x06B |  | `TDEQUANT` | destination0=destination, source0=source, scalar0=scale, scalar1=zero-point, numeric_control=rounding-and-saturation | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/irregular-and-complex/format-conversion/TDEQUANT.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/irregular-and-complex/format-conversion/TDEQUANT.md) |
 | <a id="tquant"></a>`TQUANT` | Quantize source elements using scale, zero point, rounding, and saturation controls. | SFU | 0x06A |  | `TQUANT` | destination0=destination, source0=source, scalar0=scale, scalar1=zero-point, numeric_control=rounding-and-saturation | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/irregular-and-complex/format-conversion/TQUANT.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/irregular-and-complex/format-conversion/TQUANT.md) |
 
 ### <a id="irregular-and-complex-initialization"></a>initialization
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tci"></a>`TCI` | Initialize destination elements as an ascending or descending counter sequence. | SFU | 0x066 |  | `TCI` | destination0=destination, scalar0=start, flag0=descending | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/irregular-and-complex/initialization/TCI.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/irregular-and-complex/initialization/TCI.md) |
 | <a id="thistogram"></a>`THISTOGRAM` | Accumulate a histogram from source values and selected-byte indices. | SFU | 0x068 |  | `THISTOGRAM` | destination0=destination, source0=source, source1=indices, selected_byte=selected-byte | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/irregular-and-complex/initialization/THISTOGRAM.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/irregular-and-complex/initialization/THISTOGRAM.md) |
@@ -273,21 +273,21 @@ Tile 布局重排与初始化,含转置、拼接、插入、抽取、im2col、�
 
 ### <a id="irregular-and-complex-layout"></a>layout
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tgather"></a>`TGATHER` | Gather source elements by Tile indices into the destination. | SFU | 0x06F |  | `TGATHER` | destination0=destination, source0=source, source1=indices | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/irregular-and-complex/layout/TGATHER.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/irregular-and-complex/layout/TGATHER.md) |
 | <a id="tscatter"></a>`TSCATTER` | Scatter source elements by Tile indices into the destination. | SFU | 0x070 |  | `TSCATTER` | destination0=destination, source0=source, source1=indices | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/irregular-and-complex/layout/TSCATTER.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/irregular-and-complex/layout/TSCATTER.md) |
 
 ### <a id="irregular-and-complex-sorting"></a>sorting
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tmrgsort"></a>`TMRGSORT` | Merge two sorted source Tiles in the selected ascending or descending order. | SFU | 0x06D |  | `TMRGSORT` | destination0=destination, source0=source-left, source1=source-right, flag0=descending | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/irregular-and-complex/sorting/TMRGSORT.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/irregular-and-complex/sorting/TMRGSORT.md) |
 | <a id="tsort"></a>`TSORT` | Sort source groups, returning ordered values and original U32 indices. | SFU | 0x06C |  | `TSORT` | destination0=destination, destination1=original-indices-u32, source0=source, sort_width=sort-width, flag0=descending | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/irregular-and-complex/sorting/TSORT.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/irregular-and-complex/sorting/TSORT.md) |
 
 ### <a id="irregular-and-complex-union"></a>union
 
-| 助记符 | 摘要 | 引擎 | 选择子 | Func/Mode | 处理器 | 操作数 | ASL / Doc |
+| Mnemonic | Summary | Engine | Selector | Func/Mode | Handler | Operands | ASL / Doc |
 | --- | --- | :---: | :---: | :---: | --- | --- | --- |
 | <a id="tpartadd"></a>`TPARTADD` | Combine corresponding source partitions by addition. | SFU | 0x071 |  | `ExecuteTilePartial` | destination0=destination, source0=source-left, source1=source-right | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/irregular-and-complex/union/TPARTADD.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/irregular-and-complex/union/TPARTADD.md) |
 | <a id="tpartmax"></a>`TPARTMAX` | Combine corresponding source partitions by maximum selection. | SFU | 0x073 |  | `ExecuteTilePartial` | destination0=destination, source0=source-left, source1=source-right | [ASL](https://github.com/PTO-ISA/pto-spec/blob/main/asl/tile/irregular-and-complex/union/TPARTMAX.asl) / [Doc](https://github.com/PTO-ISA/pto-spec/blob/main/docs/tile/irregular-and-complex/union/TPARTMAX.md) |
@@ -296,140 +296,140 @@ Tile 布局重排与初始化,含转置、拼接、插入、抽取、im2col、�
 
 ---
 
-## 附录 A: bundle 组合模板示例
+## Appendix A: Bundle composition template
 
-每条 tile 指令在程序中必须以下面的 bundle 形式出现(以 `TADD` 为例):
+Every tile instruction must appear inside the following bundle shape (using `TADD` as an example):
 
 ```asm
 BSTART.VEC TADD, DataType
-B.DATR (optional)        # 数据属性
-B.DIM LB0                # 第一维
-B.DIM (LB1/LB2 for 2D)   # 第二/三维
-B.IOT                    # 输入输出 tile 绑定
+B.DATR (optional)        # data attributes
+B.DIM LB0                # first dimension
+B.DIM (LB1/LB2 for 2D)   # second/third dimension
+B.IOT                    # input/output tile binding
 BSTOP
 ```
 
-`BSTART.TEPL <MNEMONIC>` 是兼容写法;0.58.0 起 `BSTART.VEC`/`BSTART.SFU` 是规范拆分。
+`BSTART.TEPL <MNEMONIC>` is an accepted compatibility spelling; from 0.58.0 the canonical split is `BSTART.VEC` / `BSTART.SFU`.
 
-## 附录 B: 助记符索引
+## Appendix B: Mnemonic index
 
-每条助记符带可点击跳转链接,直达主表中的指令行(内文锚点)。
+Every mnemonic below is a clickable link that jumps to the instruction row in the main tables (in-document anchor).
 
-| 助记符 | 类 | 引擎 | 跳转 |
+| Mnemonic | Class | Engine | Jump |
 | --- | --- | :---: | :---: |
-| `GMOV` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [跳转 →](#gmov) |
-| `MGATHER` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [跳转 →](#mgather) |
-| `MGATHER_CAS` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [跳转 →](#mgather_cas) |
-| `MGATHER_MASK` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [跳转 →](#mgather_mask) |
-| `MSCATTER` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [跳转 →](#mscatter) |
-| `MSCATTER_MASK` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [跳转 →](#mscatter_mask) |
-| `TABS` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tabs) |
-| `TADD` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tadd) |
-| `TADDS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [跳转 →](#tadds) |
-| `TAND` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tand) |
-| `TANDS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [跳转 →](#tands) |
-| `TCI` | [irregular-and-complex](#irregular-and-complex) | SFU | [跳转 →](#tci) |
-| `TCMP` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tcmp) |
-| `TCMPS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [跳转 →](#tcmps) |
-| `TCOLARGMAX` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#tcolargmax) |
-| `TCOLARGMIN` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#tcolargmin) |
-| `TCOLEXPAND` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#tcolexpand) |
-| `TCOLEXPANDADD` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#tcolexpandadd) |
-| `TCOLEXPANDDIV` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#tcolexpanddiv) |
-| `TCOLEXPANDEXPDIF` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#tcolexpandexpdif) |
-| `TCOLEXPANDMAX` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#tcolexpandmax) |
-| `TCOLEXPANDMIN` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#tcolexpandmin) |
-| `TCOLEXPANDMUL` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#tcolexpandmul) |
-| `TCOLEXPANDSUB` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#tcolexpandsub) |
-| `TCOLMAX` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#tcolmax) |
-| `TCOLMIN` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#tcolmin) |
-| `TCOLPROD` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#tcolprod) |
-| `TCOLSUM` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#tcolsum) |
-| `TCONCAT` | [layout-and-rearrangement](#layout-and-rearrangement) | SFU | [跳转 →](#tconcat) |
-| `TCVT` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tcvt) |
-| `TDEQUANT` | [irregular-and-complex](#irregular-and-complex) | SFU | [跳转 →](#tdequant) |
-| `TDIV` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tdiv) |
-| `TDIVS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [跳转 →](#tdivs) |
-| `TEXP` | [elementwise-tile-tile](#elementwise-tile-tile) | SFU | [跳转 →](#texp) |
-| `TEXPANDS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [跳转 →](#texpands) |
-| `TEXTRACT` | [layout-and-rearrangement](#layout-and-rearrangement) | SFU | [跳转 →](#textract) |
-| `TFILLPAD` | [layout-and-rearrangement](#layout-and-rearrangement) | SFU | [跳转 →](#tfillpad) |
-| `TFMA` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tfma) |
-| `TGATHER` | [irregular-and-complex](#irregular-and-complex) | SFU | [跳转 →](#tgather) |
-| `TGEMV` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [跳转 →](#tgemv) |
-| `TGEMV_ACC` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [跳转 →](#tgemv_acc) |
-| `TGEMV_BIAS` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [跳转 →](#tgemv_bias) |
-| `TGEMV_MX` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [跳转 →](#tgemv_mx) |
-| `TGEMV_MX_ACC` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [跳转 →](#tgemv_mx_acc) |
-| `TGEMV_MX_BIAS` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [跳转 →](#tgemv_mx_bias) |
-| `THISTOGRAM` | [irregular-and-complex](#irregular-and-complex) | SFU | [跳转 →](#thistogram) |
-| `TIMG2COL` | [layout-and-rearrangement](#layout-and-rearrangement) | SFU | [跳转 →](#timg2col) |
-| `TINSERT` | [layout-and-rearrangement](#layout-and-rearrangement) | SFU | [跳转 →](#tinsert) |
-| `TLOAD` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [跳转 →](#tload) |
-| `TLOG` | [elementwise-tile-tile](#elementwise-tile-tile) | SFU | [跳转 →](#tlog) |
-| `TMATMUL` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [跳转 →](#tmatmul) |
-| `TMATMUL_ACC` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [跳转 →](#tmatmul_acc) |
-| `TMATMUL_BIAS` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [跳转 →](#tmatmul_bias) |
-| `TMATMUL_MX` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [跳转 →](#tmatmul_mx) |
-| `TMATMUL_MX_ACC` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [跳转 →](#tmatmul_mx_acc) |
-| `TMATMUL_MX_BIAS` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [跳转 →](#tmatmul_mx_bias) |
-| `TMAX` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tmax) |
-| `TMAXS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [跳转 →](#tmaxs) |
-| `TMIN` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tmin) |
-| `TMINS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [跳转 →](#tmins) |
-| `TMOV` | [layout-and-rearrangement](#layout-and-rearrangement) | TLSU | [跳转 →](#tmov) |
-| `TMRGSORT` | [irregular-and-complex](#irregular-and-complex) | SFU | [跳转 →](#tmrgsort) |
-| `TMUL` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tmul) |
-| `TMULS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [跳转 →](#tmuls) |
-| `TNEG` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tneg) |
-| `TNOT` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tnot) |
-| `TOR` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tor) |
-| `TORS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [跳转 →](#tors) |
-| `TPARTADD` | [irregular-and-complex](#irregular-and-complex) | SFU | [跳转 →](#tpartadd) |
-| `TPARTMAX` | [irregular-and-complex](#irregular-and-complex) | SFU | [跳转 →](#tpartmax) |
-| `TPARTMIN` | [irregular-and-complex](#irregular-and-complex) | SFU | [跳转 →](#tpartmin) |
-| `TPARTMUL` | [irregular-and-complex](#irregular-and-complex) | SFU | [跳转 →](#tpartmul) |
-| `TPREFETCH` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [跳转 →](#tprefetch) |
-| `TQUANT` | [irregular-and-complex](#irregular-and-complex) | SFU | [跳转 →](#tquant) |
-| `TRECIP` | [elementwise-tile-tile](#elementwise-tile-tile) | SFU | [跳转 →](#trecip) |
-| `TRELU` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#trelu) |
-| `TREM` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#trem) |
-| `TREMS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [跳转 →](#trems) |
-| `TROWARGMAX` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#trowargmax) |
-| `TROWARGMIN` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#trowargmin) |
-| `TROWEXPAND` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#trowexpand) |
-| `TROWEXPANDADD` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#trowexpandadd) |
-| `TROWEXPANDDIV` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#trowexpanddiv) |
-| `TROWEXPANDEXPDIF` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#trowexpandexpdif) |
-| `TROWEXPANDMAX` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#trowexpandmax) |
-| `TROWEXPANDMIN` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#trowexpandmin) |
-| `TROWEXPANDMUL` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#trowexpandmul) |
-| `TROWEXPANDSUB` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#trowexpandsub) |
-| `TROWMAX` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#trowmax) |
-| `TROWMIN` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#trowmin) |
-| `TROWPROD` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#trowprod) |
-| `TROWSUM` | [reduce-and-expand](#reduce-and-expand) | SFU | [跳转 →](#trowsum) |
-| `TRSQRT` | [elementwise-tile-tile](#elementwise-tile-tile) | SFU | [跳转 →](#trsqrt) |
-| `TSCATTER` | [irregular-and-complex](#irregular-and-complex) | SFU | [跳转 →](#tscatter) |
-| `TSEL` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tsel) |
-| `TSELS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [跳转 →](#tsels) |
-| `TSHL` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tshl) |
-| `TSHLS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [跳转 →](#tshls) |
-| `TSHR` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tshr) |
-| `TSHRS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [跳转 →](#tshrs) |
-| `TSORT` | [irregular-and-complex](#irregular-and-complex) | SFU | [跳转 →](#tsort) |
-| `TSQRT` | [elementwise-tile-tile](#elementwise-tile-tile) | SFU | [跳转 →](#tsqrt) |
-| `TSTORE` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [跳转 →](#tstore) |
-| `TSUB` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#tsub) |
-| `TSUBS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [跳转 →](#tsubs) |
-| `TTRANS` | [layout-and-rearrangement](#layout-and-rearrangement) | SFU | [跳转 →](#ttrans) |
-| `TTRI` | [irregular-and-complex](#irregular-and-complex) | SFU | [跳转 →](#ttri) |
-| `TXOR` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [跳转 →](#txor) |
-| `TXORS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [跳转 →](#txors) |
+| `GMOV` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [jump →](#gmov) |
+| `MGATHER` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [jump →](#mgather) |
+| `MGATHER_CAS` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [jump →](#mgather_cas) |
+| `MGATHER_MASK` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [jump →](#mgather_mask) |
+| `MSCATTER` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [jump →](#mscatter) |
+| `MSCATTER_MASK` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [jump →](#mscatter_mask) |
+| `TABS` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tabs) |
+| `TADD` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tadd) |
+| `TADDS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [jump →](#tadds) |
+| `TAND` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tand) |
+| `TANDS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [jump →](#tands) |
+| `TCI` | [irregular-and-complex](#irregular-and-complex) | SFU | [jump →](#tci) |
+| `TCMP` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tcmp) |
+| `TCMPS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [jump →](#tcmps) |
+| `TCOLARGMAX` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#tcolargmax) |
+| `TCOLARGMIN` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#tcolargmin) |
+| `TCOLEXPAND` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#tcolexpand) |
+| `TCOLEXPANDADD` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#tcolexpandadd) |
+| `TCOLEXPANDDIV` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#tcolexpanddiv) |
+| `TCOLEXPANDEXPDIF` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#tcolexpandexpdif) |
+| `TCOLEXPANDMAX` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#tcolexpandmax) |
+| `TCOLEXPANDMIN` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#tcolexpandmin) |
+| `TCOLEXPANDMUL` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#tcolexpandmul) |
+| `TCOLEXPANDSUB` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#tcolexpandsub) |
+| `TCOLMAX` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#tcolmax) |
+| `TCOLMIN` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#tcolmin) |
+| `TCOLPROD` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#tcolprod) |
+| `TCOLSUM` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#tcolsum) |
+| `TCONCAT` | [layout-and-rearrangement](#layout-and-rearrangement) | SFU | [jump →](#tconcat) |
+| `TCVT` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tcvt) |
+| `TDEQUANT` | [irregular-and-complex](#irregular-and-complex) | SFU | [jump →](#tdequant) |
+| `TDIV` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tdiv) |
+| `TDIVS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [jump →](#tdivs) |
+| `TEXP` | [elementwise-tile-tile](#elementwise-tile-tile) | SFU | [jump →](#texp) |
+| `TEXPANDS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [jump →](#texpands) |
+| `TEXTRACT` | [layout-and-rearrangement](#layout-and-rearrangement) | SFU | [jump →](#textract) |
+| `TFILLPAD` | [layout-and-rearrangement](#layout-and-rearrangement) | SFU | [jump →](#tfillpad) |
+| `TFMA` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tfma) |
+| `TGATHER` | [irregular-and-complex](#irregular-and-complex) | SFU | [jump →](#tgather) |
+| `TGEMV` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [jump →](#tgemv) |
+| `TGEMV_ACC` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [jump →](#tgemv_acc) |
+| `TGEMV_BIAS` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [jump →](#tgemv_bias) |
+| `TGEMV_MX` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [jump →](#tgemv_mx) |
+| `TGEMV_MX_ACC` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [jump →](#tgemv_mx_acc) |
+| `TGEMV_MX_BIAS` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [jump →](#tgemv_mx_bias) |
+| `THISTOGRAM` | [irregular-and-complex](#irregular-and-complex) | SFU | [jump →](#thistogram) |
+| `TIMG2COL` | [layout-and-rearrangement](#layout-and-rearrangement) | SFU | [jump →](#timg2col) |
+| `TINSERT` | [layout-and-rearrangement](#layout-and-rearrangement) | SFU | [jump →](#tinsert) |
+| `TLOAD` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [jump →](#tload) |
+| `TLOG` | [elementwise-tile-tile](#elementwise-tile-tile) | SFU | [jump →](#tlog) |
+| `TMATMUL` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [jump →](#tmatmul) |
+| `TMATMUL_ACC` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [jump →](#tmatmul_acc) |
+| `TMATMUL_BIAS` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [jump →](#tmatmul_bias) |
+| `TMATMUL_MX` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [jump →](#tmatmul_mx) |
+| `TMATMUL_MX_ACC` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [jump →](#tmatmul_mx_acc) |
+| `TMATMUL_MX_BIAS` | [matrix-and-matrix-vector](#matrix-and-matrix-vector) | CUBE | [jump →](#tmatmul_mx_bias) |
+| `TMAX` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tmax) |
+| `TMAXS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [jump →](#tmaxs) |
+| `TMIN` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tmin) |
+| `TMINS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [jump →](#tmins) |
+| `TMOV` | [layout-and-rearrangement](#layout-and-rearrangement) | TLSU | [jump →](#tmov) |
+| `TMRGSORT` | [irregular-and-complex](#irregular-and-complex) | SFU | [jump →](#tmrgsort) |
+| `TMUL` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tmul) |
+| `TMULS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [jump →](#tmuls) |
+| `TNEG` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tneg) |
+| `TNOT` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tnot) |
+| `TOR` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tor) |
+| `TORS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [jump →](#tors) |
+| `TPARTADD` | [irregular-and-complex](#irregular-and-complex) | SFU | [jump →](#tpartadd) |
+| `TPARTMAX` | [irregular-and-complex](#irregular-and-complex) | SFU | [jump →](#tpartmax) |
+| `TPARTMIN` | [irregular-and-complex](#irregular-and-complex) | SFU | [jump →](#tpartmin) |
+| `TPARTMUL` | [irregular-and-complex](#irregular-and-complex) | SFU | [jump →](#tpartmul) |
+| `TPREFETCH` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [jump →](#tprefetch) |
+| `TQUANT` | [irregular-and-complex](#irregular-and-complex) | SFU | [jump →](#tquant) |
+| `TRECIP` | [elementwise-tile-tile](#elementwise-tile-tile) | SFU | [jump →](#trecip) |
+| `TRELU` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#trelu) |
+| `TREM` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#trem) |
+| `TREMS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [jump →](#trems) |
+| `TROWARGMAX` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#trowargmax) |
+| `TROWARGMIN` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#trowargmin) |
+| `TROWEXPAND` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#trowexpand) |
+| `TROWEXPANDADD` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#trowexpandadd) |
+| `TROWEXPANDDIV` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#trowexpanddiv) |
+| `TROWEXPANDEXPDIF` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#trowexpandexpdif) |
+| `TROWEXPANDMAX` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#trowexpandmax) |
+| `TROWEXPANDMIN` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#trowexpandmin) |
+| `TROWEXPANDMUL` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#trowexpandmul) |
+| `TROWEXPANDSUB` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#trowexpandsub) |
+| `TROWMAX` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#trowmax) |
+| `TROWMIN` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#trowmin) |
+| `TROWPROD` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#trowprod) |
+| `TROWSUM` | [reduce-and-expand](#reduce-and-expand) | SFU | [jump →](#trowsum) |
+| `TRSQRT` | [elementwise-tile-tile](#elementwise-tile-tile) | SFU | [jump →](#trsqrt) |
+| `TSCATTER` | [irregular-and-complex](#irregular-and-complex) | SFU | [jump →](#tscatter) |
+| `TSEL` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tsel) |
+| `TSELS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [jump →](#tsels) |
+| `TSHL` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tshl) |
+| `TSHLS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [jump →](#tshls) |
+| `TSHR` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tshr) |
+| `TSHRS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [jump →](#tshrs) |
+| `TSORT` | [irregular-and-complex](#irregular-and-complex) | SFU | [jump →](#tsort) |
+| `TSQRT` | [elementwise-tile-tile](#elementwise-tile-tile) | SFU | [jump →](#tsqrt) |
+| `TSTORE` | [memory-and-data-movement](#memory-and-data-movement) | TLSU | [jump →](#tstore) |
+| `TSUB` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#tsub) |
+| `TSUBS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [jump →](#tsubs) |
+| `TTRANS` | [layout-and-rearrangement](#layout-and-rearrangement) | SFU | [jump →](#ttrans) |
+| `TTRI` | [irregular-and-complex](#irregular-and-complex) | SFU | [jump →](#ttri) |
+| `TXOR` | [elementwise-tile-tile](#elementwise-tile-tile) | VEC | [jump →](#txor) |
+| `TXORS` | [tile-scalar-and-immediate](#tile-scalar-and-immediate) | VEC | [jump →](#txors) |
 
-## 附录 C: 编目剔除与保留名(来自 `asl/tile/model/dispatch/top-level.asl`)
+## Appendix C: Catalog deletions and rejections (from `asl/tile/model/dispatch/top-level.asl`)
 
-- **已删除名**(曾在历史编目中,0.58.0 不再保留):
+- **Deleted names** (once present in historical catalogs, no longer retained in 0.58.0):
 
   - `ACCCVT`
   - `TADDC`
@@ -454,7 +454,7 @@ BSTOP
   - `TRANDOM`
   - `TSORT32`
 
-- **拒绝名**(架构层拒绝,不在编目中):
+- **Rejected names** (architecturally rejected, not in the catalog):
 
   - `TEXRACT`
   - `TFILL/TEXPANDS`
