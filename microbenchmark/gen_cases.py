@@ -39,29 +39,27 @@ M16 = (16, 16)
 
 # mode 0 tile-tile binary arithmetic/bitwise
 for op in ["TADD", "TSUB", "TMUL", "TDIV", "TREm".replace("REm", "REM"),
-           "TAND", "TOR", "TXOR", "TSHL", "TSHR", "TMAX", "TMIN", "TCMP", "TPRELU"]:
+           "TAND", "TOR", "TXOR", "TSHL", "TSHR", "TMAX", "TMIN", "TCMP"]:
     if op in ("TAND", "TOR", "TXOR", "TSHL", "TSHR"):
         dt = ("i16", "i32")
     elif op == "TREM":
         dt = ("fp16", "fp32", "i32")  # re-test full dtype set
     elif op == "TCMP":
         dt = ("fp16", "fp32", "i32")
-    elif op == "TPRELU":
-        dt = ("fp16", "fp32")
     else:
         dt = ("fp16", "fp32", "i16", "i32")
     V.append(Case(op, "binary", dt, M16))
 
 # mode 0 unary
 for op, dt in [
-    ("TABS", ("fp16", "f32", "i16", "i32")),
+    ("TABS", ("fp16", "fp32", "i16", "i32")),
     ("TNOT", ("i16", "i32")),
     ("TNEG", ("fp16", "fp32", "i16", "i32")),
     ("TEXP", ("fp16", "fp32")),
     ("TLOG", ("fp16", "fp32")),
     ("TRECIP", ("fp16", "fp32")),
     ("TSQRT", ("fp16", "fp32")),
-    ("TRSQRT", ("fp16", "f32")),
+    ("TRSQRT", ("fp16", "fp32")),
     ("TRELU", ("fp16", "fp32")),
     ("TCVT", ("fp16", "fp32")),
 ]:
@@ -76,15 +74,22 @@ for op in ["TPARTADD", "TPARTMUL", "TPARTMAX", "TPARTMIN"]:
     V.append(Case(op, "binary", ("fp16", "fp32"), M16))
 
 # mode 1 tile-scalar (1 tile + scalar)
-# tile-scalar ops only support float dtypes on current toolchain
-for op in ["TADDS", "TSUBS", "TMULS", "TDIVS", "TREMS",
-           "TANDS", "TORS", "TXORS", "TSHLS", "TSHRS",
-           "TMAXS", "TMINS", "TCMPS", "TAXPY"]:
-    V.append(Case(op, "scalar", ("fp16", "f32"), M16))
+# arithmetic scalar ops: float dtypes
+for op in ["TADDS", "TSUBS", "TMULS", "TDIVS", "TREMS", "TMAXS", "TMINS", "TCMPS"]:
+    V.append(Case(op, "scalar", ("fp16", "fp32"), M16))
 
-# mode 1 tile-scalar fused (2 tile + scalar)
-for op in ["TSELS"]:
-    V.append(Case(op, "scalar3", ("fp16", "fp32"), M16))
+# bitwise/shift scalar ops: integer dtypes (ISA v0.58 only allows integer)
+for op in ["TANDS", "TORS", "TXORS", "TSHLS", "TSHRS"]:
+    V.append(Case(op, "scalar", ("i16", "i32"), M16))
+
+# mode 1 tile-scalar (1 tile + scalar)
+# arithmetic scalar ops: float dtypes
+for op in ["TADDS", "TSUBS", "TMULS", "TDIVS", "TREMS", "TMAXS", "TMINS", "TCMPS"]:
+    V.append(Case(op, "scalar", ("fp16", "fp32"), M16))
+
+# bitwise/shift scalar ops: integer dtypes (ISA v0.58 only allows integer)
+for op in ["TANDS", "TORS", "TXORS", "TSHLS", "TSHRS"]:
+    V.append(Case(op, "scalar", ("i16", "i32"), M16))
 
 # mode 1 scalar broadcast
 V.append(Case("TEXPANDS", "scalarbcast", ("fp16", "fp32"), M16))
@@ -114,8 +119,7 @@ for op in ["TCOLEXPANDADD", "TCOLEXPANDSUB", "TCOLEXPANDMUL", "TCOLEXPANDDIV",
 # mode 3 complex
 # TCONCAT: dst = [src0 | src1] along cols (src0=M×N0, src1=M×N1, dst=M×(N0+N1))
 V.append(Case("TCONCAT", "concat", ("fp16", "fp32"), M16))
-V.append(Case("TGATHERB", "gather", ("fp16", "fp32"), M16))
-V.append(Case("THISTOGRAM", "hist", ("fp16", "fp32"), M16))
+V.append(Case("THISTOGRAM", "hist", ("i16", "i32"), M16))
 
 # Opcodes the toolchain does not yet expose (or needs special layout like TCVT's
 # NZ requirement). Kept here as a skip list; re-enable when pto_tileop.hpp aligns.
@@ -124,7 +128,7 @@ VECTOR_SKIP = {
     "TROWMAX", "TROWMIN", "TROWPROD", "TROWSUM", "TROWARGMAX", "TROWARGMIN",
     "TCOLSUM", "TCOLMAX", "TCOLMIN", "TCOLPROD", "TCOLARGMAX", "TCOLARGMIN",
     # signature mismatch (PTO arity != bench template); TODO align:
-    "TSEL", "TGATHERB",
+    "TSEL",
 }
 V = [c for c in V if c.op not in VECTOR_SKIP]
 
@@ -141,7 +145,6 @@ for op, kind, dt, sz in [
     ("MSCATTER", "scatter", ("fp16", "fp32", "i32"), M16),
     ("MGATHER_MASK", "gather_mask", ("fp16", "fp32"), M16),
     ("MSCATTER_MASK", "scatter_mask", ("fp16", "fp32"), M16),
-    ("TLOAD_ND2NZ", "load_layout", ("fp16", "fp32"), M16),
 ]:
     ME.append(Case(op, kind, dt, sz))
 
@@ -190,15 +193,15 @@ cube("TMATMUL_MX", "matmul_mx", "fp16")        # e4m3 placeholder -> fp16
 #   cat=ld  : pure load (return y), thr only
 #   cat=st  : pure store, thr only
 #   cat=cv  : IN->OUT conversion, thr only
-SDTYPE = {"i32": "int32_t", "i64": "int64_t", "f32": "float", "f64": "double"}
+SDTYPE = {"i32": "int32_t", "i64": "int64_t", "fp32": "float", "f64": "double"}
 UT = {"i32": "uint32_t", "i64": "uint64_t"}
 
 # (op, cat, dtypes, lambda_tpl)  lambda_tpl uses {T} (return cast) and {ut} (unsigned cast)
 SCALAR_OPS = [
-    ("add", "bin", ("i32", "i64", "f32", "f64"), "[](auto x,auto y){{return x+y;}}"),
-    ("sub", "bin", ("i32", "i64", "f32", "f64"), "[](auto x,auto y){{return x-y;}}"),
-    ("mul", "bin", ("i32", "i64", "f32", "f64"), "[](auto x,auto y){{return x*y;}}"),
-    ("div", "bin", ("i32", "i64", "f32", "f64"), "[](auto x,auto y){{return x/y;}}"),
+    ("add", "bin", ("i32", "i64", "fp32", "f64"), "[](auto x,auto y){{return x+y;}}"),
+    ("sub", "bin", ("i32", "i64", "fp32", "f64"), "[](auto x,auto y){{return x-y;}}"),
+    ("mul", "bin", ("i32", "i64", "fp32", "f64"), "[](auto x,auto y){{return x*y;}}"),
+    ("div", "bin", ("i32", "i64", "fp32", "f64"), "[](auto x,auto y){{return x/y;}}"),
     ("and", "bin", ("i32", "i64"), "[](auto x,auto y){{return ({T})(({ut})x & ({ut})y);}}"),
     ("or",  "bin", ("i32", "i64"), "[](auto x,auto y){{return ({T})(({ut})x | ({ut})y);}}"),
     ("xor", "bin", ("i32", "i64"), "[](auto x,auto y){{return ({T})(({ut})x ^ ({ut})y);}}"),
@@ -206,25 +209,25 @@ SCALAR_OPS = [
     ("srl", "bin", ("i32", "i64"), "[](auto x,auto y){{return ({T})(({ut})x >> (y & 31));}}"),
     ("sra", "bin", ("i32", "i64"), "[](auto x,auto y){{return ({T})(x >> (y & 31));}}"),
     ("slt", "bin", ("i32", "i64"), "[](auto x,auto y){{return ({T})(x < y);}}"),
-    ("max", "bin", ("i32", "i64", "f32", "f64"), "[](auto x,auto y){{return x<y?y:x;}}"),
-    ("min", "bin", ("i32", "i64", "f32", "f64"), "[](auto x,auto y){{return x<y?x:y;}}"),
+    ("max", "bin", ("i32", "i64", "fp32", "f64"), "[](auto x,auto y){{return x<y?y:x;}}"),
+    ("min", "bin", ("i32", "i64", "fp32", "f64"), "[](auto x,auto y){{return x<y?x:y;}}"),
     ("mod", "bin", ("i32", "i64"), "[](auto x,auto y){{return x%y;}}"),
-    ("abs", "un", ("i32", "f32", "f64"), "[](auto x,auto y){{auto t=x+y; return t<0?-t:t;}}"),
-    ("neg", "un", ("i32", "i64", "f32", "f64"), "[](auto x,auto y){{return -(x+y);}}"),
+    ("abs", "un", ("i32", "fp32", "f64"), "[](auto x,auto y){{auto t=x+y; return t<0?-t:t;}}"),
+    ("neg", "un", ("i32", "i64", "fp32", "f64"), "[](auto x,auto y){{return -(x+y);}}"),
     ("not", "un", ("i32", "i64"), "[](auto x,auto y){{return ({T})(~({ut})(x+y));}}"),
     ("popc", "un", ("i32", "i64"), "[](auto x,auto y){{return ({T})__builtin_popcountll((unsigned long long)(x+y));}}"),
     ("clz", "un", ("i32", "i64"), "[](auto x,auto y){{return ({T})__builtin_clzll((unsigned long long)(x+y));}}"),
-    ("sqrt", "un", ("f32", "f64"), "[](auto x,auto y){{return ({T})std::sqrt((double)(x+y));}}"),
-    ("ld", "ld", ("i32", "i64", "f32", "f64"), "[](auto x,auto y){{return y;}}"),
+    ("sqrt", "un", ("fp32", "f64"), "[](auto x,auto y){{return ({T})std::sqrt((double)(x+y));}}"),
+    ("ld", "ld", ("i32", "i64", "fp32", "f64"), "[](auto x,auto y){{return y;}}"),
 ]
 # (op, cat, [(in,out), ...])
 SCALAR_CV = [
-    ("i2f", "cv", [("i32", "f32"), ("i32", "f64")]),
-    ("f2i", "cv", [("f32", "i32"), ("f64", "i32")]),
-    ("f2f_widen", "cv", [("f32", "f64")]),
-    ("f2f_narrow", "cv", [("f64", "f32")]),
+    ("i2f", "cv", [("i32", "fp32"), ("i32", "f64")]),
+    ("f2i", "cv", [("fp32", "i32"), ("f64", "i32")]),
+    ("f2f_widen", "cv", [("fp32", "f64")]),
+    ("f2f_narrow", "cv", [("f64", "fp32")]),
 ]
-SCALAR_ST = [("st", "st", ("i32", "i64", "f32", "f64"))]
+SCALAR_ST = [("st", "st", ("i32", "i64", "fp32", "f64"))]
 
 
 # ============ emission ============
@@ -277,7 +280,7 @@ int main() {{
         body = f"    {ct} s = ({ct})0.5;\n    bench_scalar<{ct},M,N>(c,a,s,[](auto& dst,auto& s0,auto& sc){{ {op}(dst,s0,sc); }});\n"
     elif c.kind == "scalar3":
         # TSELS signature is (dst, src0, scalar, src1).
-        call = f"{op}(dst,s0,sc,s1)" if c.op == "TSELS" else f"{op}(dst,s0,s1,sc)"
+        call = f"{op}(dst,s0,s1,sc)" if c.op == "TSELS" else f"{op}(dst,s0,s1,sc)"
         body = f"    {ct} s = ({ct})0.5;\n    bench_scalar3<{ct},M,N>(c,a,b,s,[](auto& dst,auto& s0,auto& s1,auto& sc){{ {call}; }});\n"
     elif c.kind == "scalarbcast":
         body = f"    {ct} s = ({ct})0.5;\n    bench_scalar_bcast<{ct},M,N>(c,s,[](auto& dst,auto& sc){{ {op}(dst,sc); }});\n"
