@@ -205,12 +205,12 @@ void flash_mla_dense_decode_tileop(
     using tileK = TileRight<dtype, DChunk_, Tk_>;
     using tileV = TileRight<dtype, Tk_, VChunk_>;
 
-    using tileScoreAcc = TileAcc<float, Tm_, Tk_>;
+    using tileScoreAcc = Tile<Location::Vec, float, Tm_, Tk_, BLayout::RowMajor>;
     using tileScore = Tile<Location::Vec, float, Tm_, Tk_, BLayout::ColMajor>;
     using tileScoreCast = Tile<Location::Vec, dtype, Tm_, Tk_, BLayout::ColMajor>;
     using tileScoreLeft = TileLeft<dtype, Tm_, Tk_>;
 
-    using tilePVAcc = TileAcc<float, Tm_, VChunk_>;
+    using tilePVAcc = Tile<Location::Vec, float, Tm_, VChunk_, BLayout::RowMajor>;
     using tileO = Tile<Location::Vec, float, Tm_, VChunk_, BLayout::ColMajor>;
     using tileOCast = Tile<Location::Vec, dtype, Tm_, VChunk_, BLayout::ColMajor>;
 
@@ -297,8 +297,7 @@ void flash_mla_dense_decode_tileop(
                     FLASHMLA_DUMP_TILE("pass1/tQ q_block=0 d_block=0 shape=[Tm,DChunk]", tQ0);
                     FLASHMLA_DUMP_TILE("pass1/tK cube-right kv_tile=0 d_block=0 logical shape=[DChunk,Tk]", tK0);
                 }
-                TMATMUL(tScoreAcc0, tQ0, tK0);
-                ACCCVT(tScore, tScoreAcc0);
+                TMATMUL(tScore, tQ0, tK0);
 
                 #pragma clang loop unroll(full)
                 for (int d_block = 1; d_block < Db; ++d_block) {
@@ -310,8 +309,7 @@ void flash_mla_dense_decode_tileop(
                     auto gK = gKIter(d_block, kv_tile_row);
                     TLOAD(tQ, gQ);
                     TLOAD(tK, gK);
-                    TMATMUL(tPartialAcc, tQ, tK);
-                    ACCCVT(tPartial, tPartialAcc);
+                    TMATMUL(tPartial, tQ, tK);
                     TADD(tScore, tScore, tPartial);
                 }
 
@@ -405,8 +403,7 @@ void flash_mla_dense_decode_tileop(
                         TSTORE(dbgKSub, tK0);
                     }
 #endif
-                    TMATMUL(tScoreAcc0, tQ0, tK0);
-                    ACCCVT(tScore, tScoreAcc0);
+                    TMATMUL(tScore, tQ0, tK0);
 
                     #pragma clang loop unroll(full)
                     for (int d_block = 1; d_block < Db; ++d_block) {
@@ -424,8 +421,7 @@ void flash_mla_dense_decode_tileop(
                             TSTORE(dbgKSub, tK);
                         }
 #endif
-                        TMATMUL(tPartialAcc, tQ, tK);
-                        ACCCVT(tPartial, tPartialAcc);
+                        TMATMUL(tPartial, tQ, tK);
                         TADD(tScore, tScore, tPartial);
                     }
 
@@ -474,8 +470,7 @@ void flash_mla_dense_decode_tileop(
 
                     tilePVAcc tPVAcc;
                     tileO tPV;
-                    TMATMUL(tPVAcc, tProbLeft, tV);
-                    ACCCVT(tPV, tPVAcc);
+                    TMATMUL(tPV, tProbLeft, tV);
                     TADD(tO, tO, tPV);
                     if (q_block == 0 && v_block == 0 && logical_page == 0 && sub == 0) {
                         FLASHMLA_DUMP_TILE("pass2/tPV first sub shape=[Tm,VChunk]", tPV);
