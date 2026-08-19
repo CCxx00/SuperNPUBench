@@ -24,22 +24,18 @@ using namespace pto;
 //   - C remains a PE-private local accumulator tile.
 template <typename dtype, int gM, int gN, int gK, int tM, int tN, int tK>
 void matmul_shared(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
-    constexpr int kTileByteLimit = 8 * 1024;
+    constexpr int kPeNum = 4;
 
     static_assert(gM % tM == 0, "M must be divisible by tM");
     static_assert(gN % tN == 0, "N must be divisible by tN");
     static_assert(gK % tK == 0, "K must be divisible by tK");
-    static_assert(tM * tK * sizeof(dtype) < kTileByteLimit,
-                  "each PE A tile must be smaller than 8 KB");
-    static_assert(tM * tN * sizeof(float) < kTileByteLimit,
-                  "each PE C tile must be smaller than 8 KB");
-    static_assert(tK * tN * sizeof(dtype) < kTileByteLimit,
-                  "shared B tile must be smaller than 8 KB");
+    static_assert(tM % kPeNum == 0,
+                  "tM must be divisible by the PE count");
 
     const uint32_t tid = get_thread_idx();
 
-    a_ptr += tid * gM * gK;
-    c_ptr += tid * gM * gN;
+    // a_ptr += tid * gM * gK;
+    // c_ptr += tid * gM * gN;
 
     using gmA = global_tensor<dtype, RowMajor<gM, gK>>;
     using gmB = global_tensor<dtype, RowMajor<gK, gN>>;
@@ -49,7 +45,11 @@ void matmul_shared(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
     using tileBLocal = TileRight<dtype, tK, tN>;
     using tileAShared = SharedTile<tileALocal>;
     using tileBShared = SharedTile<tileBLocal>;
-    using tileC = Tile<Location::Vec, float, tM, tN, BLayout::RowMajor>;
+    // TMATMUL is issued cooperatively by four PEs.  The shared A tile covers
+    // the complete [tM, tK] block, while each PE keeps only its contiguous
+    // [tM / 4, tN] row slice of C in a private Vec tile.
+    using tileC =
+        Tile<Location::Vec, float, tM / kPeNum, tN, BLayout::RowMajor>;
 
     using itA = global_iterator<gmA, tileALocal>;
     using itB = global_iterator<gmB, tileBLocal>;
@@ -73,8 +73,8 @@ void matmul_shared(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
                 auto gB = gIterB(0, j);
                 tileAShared tAShared;
                 tileBShared tBShared;
-                TLOAD(tAShared, gA);
-                TLOAD(tBShared, gB);
+                TLOAD<tileALocal, 1>(tAShared, gA);
+                TLOAD<tileBLocal, 1>(tBShared, gB);
                 TMATMUL(tC, tAShared, tBShared);
             } else {
                 {
@@ -82,8 +82,8 @@ void matmul_shared(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
                     auto gB = gIterB(0, j);
                     tileAShared tAShared;
                     tileBShared tBShared;
-                    TLOAD(tAShared, gA);
-                    TLOAD(tBShared, gB);
+                    TLOAD<tileALocal, 1>(tAShared, gA);
+                    TLOAD<tileBLocal, 1>(tBShared, gB);
                     TMATMUL(tC, tAShared, tBShared);
                 }
 
@@ -93,13 +93,15 @@ void matmul_shared(float *c_ptr, dtype *a_ptr, dtype *b_ptr) {
                     auto gB = gIterB(k, j);
                     tileAShared tAShared;
                     tileBShared tBShared;
-                    TLOAD(tAShared, gA);
-                    TLOAD(tBShared, gB);
+                    TLOAD<tileALocal, 1>(tAShared, gA);
+                    TLOAD<tileBLocal, 1>(tBShared, gB);
                     TMATMUL_ACC(tC, tC, tAShared, tBShared);
                 }
             }
 
-            auto gC = gIterC(i, j);
+            // itC advances by tM/4 rows, so map PE tid to its row slice in
+            // the logical [tM, tN] output block.
+            auto gC = gIterC(i * kPeNum + tid, j);
             TSTORE(gC, tC);
         }
     }

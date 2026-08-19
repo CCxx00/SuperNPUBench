@@ -140,7 +140,7 @@ void flashmla_dump_tile_head(const char* label, tile_shape& tile, int max_rows =
 //
 // To fit the local PTO tile constraints, the large FlashMLA dimensions are
 // chunked explicitly:
-//   QK: reduce d_k through DChunk-sized TMATMUL/TMATMUL_ACC chunks.
+//   QK: reduce d_k through DChunk-sized TMATMUL chunks and ordinary Tile adds.
 //   PV: write d_v through VChunk-sized output chunks.
 //
 // Dense MLA stores K/V in one dense cache. This model treats V as the first
@@ -205,12 +205,10 @@ void flash_mla_dense_decode_tileop(
     using tileK = TileRight<dtype, DChunk_, Tk_>;
     using tileV = TileRight<dtype, Tk_, VChunk_>;
 
-    using tileScoreAcc = Tile<Location::Vec, float, Tm_, Tk_, BLayout::RowMajor>;
     using tileScore = Tile<Location::Vec, float, Tm_, Tk_, BLayout::ColMajor>;
     using tileScoreCast = Tile<Location::Vec, dtype, Tm_, Tk_, BLayout::ColMajor>;
     using tileScoreLeft = TileLeft<dtype, Tm_, Tk_>;
 
-    using tilePVAcc = Tile<Location::Vec, float, Tm_, VChunk_, BLayout::RowMajor>;
     using tileO = Tile<Location::Vec, float, Tm_, VChunk_, BLayout::ColMajor>;
     using tileOCast = Tile<Location::Vec, dtype, Tm_, VChunk_, BLayout::ColMajor>;
 
@@ -287,7 +285,6 @@ void flash_mla_dense_decode_tileop(
 
                 tileQ tQ0;
                 tileK tK0;
-                tileScoreAcc tScoreAcc0;
                 tileScore tScore;
                 auto gQ0 = gQIter(q_block, 0);
                 auto gK0 = gKIter(0, kv_tile_row);
@@ -303,7 +300,6 @@ void flash_mla_dense_decode_tileop(
                 for (int d_block = 1; d_block < Db; ++d_block) {
                     tileQ tQ;
                     tileK tK;
-                    tileScoreAcc tPartialAcc;
                     tileScore tPartial;
                     auto gQ = gQIter(q_block, d_block);
                     auto gK = gKIter(d_block, kv_tile_row);
@@ -387,7 +383,6 @@ void flash_mla_dense_decode_tileop(
 
                     tileQ tQ0;
                     tileK tK0;
-                    tileScoreAcc tScoreAcc0;
                     tileScore tScore;
                     auto gQ0 = gQIter(q_block, 0);
                     auto gK0 = gKIter(0, kv_tile_row);
@@ -409,7 +404,6 @@ void flash_mla_dense_decode_tileop(
                     for (int d_block = 1; d_block < Db; ++d_block) {
                         tileQ tQ;
                         tileK tK;
-                        tileScoreAcc tPartialAcc;
                         tileScore tPartial;
                         auto gQ = gQIter(q_block, d_block);
                         auto gK = gKIter(d_block, kv_tile_row);
@@ -468,7 +462,6 @@ void flash_mla_dense_decode_tileop(
 #endif
                     }
 
-                    tilePVAcc tPVAcc;
                     tileO tPV;
                     TMATMUL(tPV, tProbLeft, tV);
                     TADD(tO, tO, tPV);
