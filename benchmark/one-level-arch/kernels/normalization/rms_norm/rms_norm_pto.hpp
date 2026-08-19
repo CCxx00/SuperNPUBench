@@ -121,22 +121,28 @@ void rms_norm(dtype *x, const int64_t *tiling, dtype *out, float eps = 1e-6f) {
 }
 
 // Compile-time shape / tiling (gelu/gather style). tR must cover the full row.
-template <typename dtype, int gA, int gR, int tA, int tR>
+// 4PE: peA = gA / PE_NUM rows per PE; row-major offset = tid * peA * gR.
+template <typename dtype, int peA, int gA, int gR, int tA, int tR>
 void rms_norm(dtype *x, dtype *out, float eps = 1e-6f) {
     static_assert(gA > 0 && gR > 0 && tA > 0 && tR > 0);
+    static_assert(peA > 0 && gA % peA == 0, "gA must be divisible by peA");
+    static_assert(peA >= tA, "peA must cover one tile_a");
     static_assert(tR == gR, "static rms_norm is a single R-tile; use rms_norm_binary for R-split");
-    constexpr int Mb = gA / tA;
-    constexpr int rmd_A = gA % tA;
+    constexpr int Mb = peA / tA;
+    constexpr int rmd_A = peA % tA;
     constexpr float inv_r = 1.0f / static_cast<float>(gR);
 
-    using gm_t = global_tensor<dtype, RowMajor<gA, gR>>;
+    using gm_t = global_tensor<dtype, RowMajor<peA, gR>>;
     using tile_h = Tile<Location::Vec, dtype, tA, tR, BLayout::RowMajor>;
     using tile_f = Tile<Location::Vec, float, tA, tR, BLayout::RowMajor>;
     using tile_v = Tile<Location::Vec, float, tA, 128, BLayout::RowMajor, tA, 1>;
     using it_t = global_iterator<gm_t, tile_h>;
 
-    it_t gI(x);
-    it_t gO(out);
+    const uint32_t tid = get_thread_idx();
+    const uint32_t gm_offset = tid * static_cast<uint32_t>(peA * gR);
+
+    it_t gI(x + gm_offset);
+    it_t gO(out + gm_offset);
 
     for (int ia = 0; ia < Mb; ++ia) {
         tile_h src_h, dst_h;

@@ -13,6 +13,10 @@
 #define EPS 1e-6f
 #endif
 
+#ifndef PE_NUM
+#define PE_NUM 1
+#endif
+
 // Same as dynamic rms_norm.cpp tiling_info {16,512,2,512}
 #ifndef G_A
 #define G_A 16
@@ -30,6 +34,12 @@
 int main() {
     using dtype = DType;
 
+    static_assert(PE_NUM > 0, "PE_NUM must be positive");
+    static_assert(G_A % PE_NUM == 0, "G_A must be divisible by PE_NUM");
+    static_assert((G_A / PE_NUM) >= TILE_A, "PE-local G_A must cover one tile_a");
+
+    constexpr int pe_a = G_A / PE_NUM;
+
     dtype input_buf[G_A * G_R];
     dtype output_buf[G_A * G_R];
     dtype *input = input_buf;
@@ -43,7 +53,8 @@ int main() {
                    static_cast<size_t>(G_A) * G_R * sizeof(dtype));
 #endif
 
-    rms_norm<dtype, G_A, G_R, TILE_A, TILE_R>(input, output, EPS);
+    // Full [G_A, G_R] buffers; kernel splits A with get_thread_idx().
+    rms_norm<dtype, pe_a, G_A, G_R, TILE_A, TILE_R>(input, output, EPS);
 
 #ifdef RES_CHECK
     writeBinaryFile(CHK_DIR "/output.bin", (uint8_t *)output,
