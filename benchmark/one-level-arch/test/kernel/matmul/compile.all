@@ -59,8 +59,3 @@ make TESTCASE=matmul TYPE=MASK MODE=MASK_FP8 M=256 N=256 K=256 tM=32 tN=32 tK=64
 make TESTCASE=matmul TYPE=MASK MODE=MASK_FP8_REUSEA M=256 N=256 K=256 tM=32 tN=32 tK=64
 make TESTCASE=matmul TYPE=MASK MODE=MASK_FP8_REUSEB M=256 N=256 K=256 tM=32 tN=32 tK=64
 # make TESTCASE=matmul TYPE=MASK MODE=MX_FP8 M=256 N=256 K=256 tM=32 tN=32 tK=64
-
-# ============================================
-# GMMA: four PE-local A/C matrices with one shared logical B matrix
-# ============================================
-make TESTCASE=matmul TYPE=GMMA MODE=MASK_FP16 M=256 N=256 K=256 tM=16 tN=16 tK=64

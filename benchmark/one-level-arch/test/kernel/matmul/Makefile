@@ -5,7 +5,6 @@
 #   - A16W4: BF16 x FP4 mixed precision (uses A16W4.cpp)
 #   - MASK: Generic matmul with mask (uses matmul.cpp)
 #   - MATMUL_VALIDATE: Numerical-precision check, all-1 inputs, golden == K (uses matmul_validate.cpp)
-#   - GMMA: GMMA matmul model with PE-sliced lhs and shared rhs (uses matmul_gmma.cpp)
 #
 # For TYPE=MASK, use MODE to select variant:
 #   - VEC, FRAC
@@ -77,19 +76,6 @@ ifeq ($(TYPE), MATMUL_VALIDATE)
       TARGET = $(ELF_HEAD)/$(NAME)_MATMUL_VALIDATE_M$(M)_N$(N)_K$(K)_tM$(tM)_tN$(tN)_tK$(tK).elf
    else
       TARGET = $(ELF_HEAD)/$(TESTCASE)_MATMUL_VALIDATE_M$(M)_N$(N)_K$(K)_tM$(tM)_tN$(tN)_tK$(tK).elf
-   endif
-endif
-
-ifeq ($(TYPE), GMMA)
-   SRC_FILE = $(TEST_ROOT)/$(CASE_SRC_DIR)/matmul_gmma.cpp
-   DEFINES += -DglobM=$(M) -DglobN=$(N) -DglobK=$(K) -DtilM=$(tM) -DtilN=$(tN) -DtilK=$(tK)
-   ifneq ($(MODE), )
-      DEFINES += -D$(MODE)
-   endif
-   ifneq ($(NAME), )
-      TARGET = $(ELF_HEAD)/$(NAME)_GMMA_$(MODE)_M$(M)_N$(N)_K$(K)_tM$(tM)_tN$(tN)_tK$(tK).elf
-   else
-      TARGET = $(ELF_HEAD)/$(TESTCASE)_GMMA_$(MODE)_M$(M)_N$(N)_K$(K)_tM$(tM)_tN$(tN)_tK$(tK).elf
    endif
 endif
 
