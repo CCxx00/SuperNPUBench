@@ -298,7 +298,220 @@ See LICENSE.
 
 ---
 
-> **当前验证基线**：2026-08-19（434 个已编译 ELF 全量 gfrun 复测；matmul MASK_FP32 golden 数值验证通过）
+> **当前验证基线**：2026-08-20（433 个已编译 ELF 全量 gfrun 复测；模型侧已修复 TEPL expand 段错误，micro 全量回到 08-19 基线，总 PASS 反超 08-19）
+
+# gfrun 执行结果汇总 — 2026-08-20
+
+## 验证环境
+
+| 组件 | 分支/版本 | Commit |
+|---|---|---|
+| gfrun / SuperScalarModel | `exp/shared-capacity-lb-semantics-20260819` | `78adfe32c1f203d3924714f5a8d3e6827ad01799` |
+| llvm-project | `dev-llvm15_56` | `b945a5d01323de2f38989288d0a4c423abff3ad1` |
+| Linx-TileOP-API | detached HEAD | `c02dae6587aaa4262e4dceb5191bb6f6d1232f65` |
+
+gfrun 于 08-20 16:11 重编（分支由早晨 `4758e93f` 推进到 `78adfe32`，新增 4 个
+`fix(tepl/gfrun)` 提交，关键修复见下文「修复记录」）。工具链（08-20 09:47 重编）：
+
+```text
+/Users/blacktraker/Programming/gitproj/DV4/linx-toolchain-build-latest/output/linx_blockisa_llvm_musl/bin/clang++
+```
+
+普通算子执行命令：
+
+```bash
+gfrun -t 1 -f <elf>
+```
+
+multi_thread 算子使用 4 PE：
+
+```bash
+gfrun -t 1 -s softcore.multiThreadNum=4 -f <elf>
+```
+
+每个 ELF 的超时时间为 90 秒。PASS 要求 gfrun 退出码为 0、输出包含
+`Reach the End of Benchmark`，并且 `R2 = 0`。
+
+## 编译覆盖
+
+- 成功生成 ELF：433 个（microbenchmark 350 + one-level 83）。
+- 编译失败、未进入 gfrun：
+  - microbenchmark（5，已知，与 08-19 一致）：`mgather_mask_fp16/fp32`、
+    `mscatter_mask_fp16/fp32`、fixp `lrelu_only`。
+  - one-level 仅剩 fa `sfa`×2（`template_asm.hpp:2191` TMATMUL `A.Rows x B.Cols`
+    形状契约，新 TileOP-API `c02dae6` 收紧），以及 08-19 即已失败的历史项
+    `fa_HIF4_HIF4`（`QuantType`→`QuantTile` 重命名 + TLOAD 不匹配）、`sort`、
+    `matmul_gmma`、`deepseek/sinkhorn_fwd`/`expand_to_fused`。
+- **本轮已修复**：
+  - `DType` 宏冲突（broadcast 6 / concat 4 / transpose 4 / gather 1 = 15 配置）：
+    测试宏 `-DDType=<类型>` 与 `template_asm.hpp` 的 `DType` 标识符重名，已统一
+    改名为 `DATA_TYPE`（4 Makefile + 15 源文件），15 个配置恢复编译。
+  - gfrun 重建（`4758e93f`→`78adfe32`）：修复 TEPL expand 段错误，
+    `broadcast_vec_07`、vector `trowexpand`/`tcolexpand` 恢复 PASS；CUBE 共享
+    输出语义修复 `multi_thread/matmul`（FAIL→PASS）。
+  - `multi_thread/fa` Makefile 适配新 PE-local group matmul 语义
+    （`Tm%4==0`、物理 tile `Tm/4*Tk`），恢复编译并 gfrun PASS。
+  - `norm`、`element_wise/gelu_debug`、`fa_softmax_pto Tm4_Tk8` 等 config 本轮
+    补入覆盖（均 PASS）。
+
+## 总体结果
+
+| 范围 | ELF 数 | PASS | FAIL | TIMEOUT | 通过率 |
+|---|---:|---:|---:|---:|---:|
+| microbenchmark | 350 | 281 | 69 | 0 | 80.3% |
+| one-level | 83 | 63 | 20 | 0 | 75.9% |
+| **合计** | **433** | **344** | **89** | **0** | **79.4%** |
+
+## 分类结果
+
+| 类别 | 总数 | PASS | FAIL | TIMEOUT |
+|---|---:|---:|---:|---:|
+| microbenchmark/cube | 6 | 2 | 4 | 0 |
+| microbenchmark/fixp | 63 | 4 | 59 | 0 |
+| microbenchmark/memory | 19 | 17 | 2 | 0 |
+| microbenchmark/scalar | 124 | 124 | 0 | 0 |
+| microbenchmark/vector | 138 | 134 | 4 | 0 |
+| one-level/broadcast | 6 | 6 | 0 | 0 |
+| one-level/concat | 4 | 4 | 0 | 0 |
+| one-level/control | 6 | 0 | 6 | 0 |
+| one-level/deepseek | 21 | 14 | 7 | 0 |
+| one-level/element_wise | 2 | 2 | 0 | 0 |
+| one-level/fa | 11 | 11 | 0 | 0 |
+| one-level/flashMLA | 2 | 2 | 0 | 0 |
+| one-level/gather | 1 | 1 | 0 | 0 |
+| one-level/matmul | 16 | 9 | 7 | 0 |
+| one-level/multi_thread/fa | 1 | 1 | 0 | 0 |
+| one-level/multi_thread/matmul | 1 | 1 | 0 | 0 |
+| one-level/multi_thread/vec | 2 | 2 | 0 | 0 |
+| one-level/norm | 1 | 1 | 0 | 0 |
+| one-level/reduction | 5 | 5 | 0 | 0 |
+| one-level/transpose | 4 | 4 | 0 | 0 |
+
+> 注：fa `sfa`(2) 因 TMATMUL 形状契约编译失败；`fa_HIF4_HIF4`、`sort`、`matmul_gmma`、`deepseek sinkhorn_fwd`/`expand_to_fused` 08-19 即已编译失败，均无 ELF 未计入上表。
+
+## 重点结论
+
+- **gfrun 重建修复 TEPL expand 段错误**：早晨 `4758e93f` 的
+  `ExecuteTROWEXPAND/TCOLEXPAND` 无条件读 `srcTile[1]`，对一元 expand
+  （`srcTile.size()==1`）越界段错误，波及 `broadcast_vec_07` 与 vector
+  `trowexpand`/`tcolexpand`。`78adfe32` 改为
+  `broadcastIndex = srcTile.size() > 1 ? 1 : 0`，全部恢复 PASS。
+  micro 全量（281P/69F）已与 08-19 完全一致。
+- **multi_thread/matmul 修复**：CUBE 共享输出语义（`coreSharedOutput`、
+  `localRows = m/kCorePeCount`）使 `multi_thread/matmul` 由 FAIL→PASS。
+- **multi_thread/fa 恢复**：测试侧 Makefile 适配新 PE-local group matmul
+  （`Tm%4==0`、物理 tile `Tm/4*Tk`），编译通过且 4-PE gfrun PASS。
+- **覆盖补齐**：`norm`、`element_wise/gelu_debug`、`fa_softmax_pto Tm4_Tk8`
+  本轮补入，均 PASS。
+- **唯一新增编译回归**：fa `sfa`×2（`template_asm.hpp:2191` TMATMUL
+  `A.Rows x B.Cols` 形状契约，新 TileOP-API `c02dae6` 收紧）；08-19 这两个
+  sfa 是运行期 FAIL，本轮退化为编译期 FAIL（无 ELF）。
+- **0 超时**：08-19 唯一超时 `concat_scatter_...8000` 本轮 PASS。
+- 持续模型限制（与 08-19 一致，非本轮回归）：cube 2/6、fixp 4/63、control 0/6、
+  deepseek 14/21、matmul 9/16（A16W4/HIF4 系列）、memory 17/19、vector 134/138
+  （`tabs_i16/i32`、`thistogram_i16/i32`，reserved TEPL selector）。
+
+## 修复记录
+
+### 1. `DType` 宏冲突
+
+新 TileOP-API `c02dae65` 在 `template_asm.hpp:6415` 引入函数模板 `TQUANT`，
+其中 4 个 `if constexpr` 分支的内联汇编声明了操作数 `[DType] "i"(...)`，并在
+汇编字符串里用 `%c[DType]` 引用它。测试侧 Makefile 一直用命令行宏
+`-DDType=<类型>` 注入数据类型（`__half` / `int32_t` 等）。宏会把源码里所有裸
+`DType` 词法符号替换成类型名，于是操作数声明被改名为 `[<类型>]`，而汇编字符串
+里的 `%c[DType]` 不被宏展开、仍引用 `DType` → clang 报 `unknown symbolic
+operand name in inline assembly string`。`-fsyntax-only` 复现：带 `-DDType=__half`
+报 4 处错误，去掉该宏则 0 错误。
+
+修复：把测试侧宏统一改名为 `DATA_TYPE`（`tileop-api` 头里无此标识符，无冲突）。
+
+- **Makefile**（4 个，`benchmark/one-level-arch/test/kernel/{broadcast,
+  concat,transpose,gather}/Makefile`）：`-DDType=$(DType)` → `-DDATA_TYPE=$(DType)`。
+  保留 make 变量 `$(DType)` 与 ELF 文件名 `_DType$(DType)_` 不变，不扰动
+  run 脚本与历史命名匹配。
+- **源文件**（15 个 `.cpp`）：`#ifndef DType` / `#define DType <默认类型>` /
+  `using dtype = DType;` 三处 `DType` → `DATA_TYPE`（`broadcast` 11 个、
+  `concat` 2 个、`transpose` 1 个、`gather` 1 个；`broadcast_vec_07.cpp` 此前
+  已由用户单独修复，未重复改）。
+
+修复后 15 个配置全部编译通过，gfrun 全部 PASS（`broadcast_vec_07` 在下述 gfrun
+重建后亦恢复）。
+
+### 2. gfrun TEPL expand 段错误（`4758e93f` → `78adfe32`）
+
+早晨 gfrun `4758e93f` 的 `ExecuteTROWEXPAND` / `ExecuteTCOLEXPAND`
+（`SuperScalarModel/emulator/engine/TEPLEngine.cpp:416` / `:835`）无条件读
+`block->srcTile[1]` 作为广播源 tile。但一元 expand（`TROWEXPAND(dst, src)`
+单源）的 `srcTile.size()==1`（`AccumulateBlockInfo.cpp:431` 断言 "unary TEPL
+requires exactly one Tile source"），`srcTile[1]` 越界 → SIGSEGV（rc=139）。
+崩溃点 opcode `0x24419181`（TROWEXPAND），波及 `broadcast_vec_07` 与 micro
+`trowexpand`/`tcolexpand` ×4。
+
+修复 `78adfe32`：`const size_t broadcastIndex = block->srcTile.size() > 1 ? 1 : 0;`
+后用 `srcTile[broadcastIndex]`。二元 expand 仍取 `srcTile[1]`，一元 expand
+回落到 `srcTile[0]`。修复后 `broadcast_vec_07`、`trowexpand_fp16/fp32`、
+`tcolexpand_fp16/fp32` 全部恢复 PASS。同一批 `exp/shared-capacity-lb-semantics`
+提交还修复了 CUBE 共享输出语义（`coreSharedOutput`、`localRows =
+m/kCorePeCount`），使 `multi_thread/matmul` 由 FAIL→PASS。
+
+## 与 2026-08-19 基线的差异
+
+08-19 基线使用 gfrun `01f9ec10`、llvm `86959776b`（temp 分支）、TileOP-API
+`8b2ee78`，434 ELF、341 PASS、92 FAIL、1 TIMEOUT。本轮三件套全换且均于 08-20
+重编（gfrun 分支由早晨 `4758e93f` 推进到 `78adfe32`）。两轮可比类别：
+
+| 类别 | 08-19 (P/F/T) | 08-20 (P/F/T) | 变化 |
+|---|---|---|---|
+| microbenchmark/scalar | 124/0/0 | 124/0/0 | 持平 |
+| microbenchmark/cube | 2/4/0 | 2/4/0 | 持平 |
+| microbenchmark/fixp | 4/59/0 | 4/59/0 | 持平 |
+| microbenchmark/memory | 17/2/0 | 17/2/0 | 持平 |
+| microbenchmark/vector | 134/4/0 | 134/4/0 | 持平（gfrun 重建后恢复） |
+| one-level/broadcast | 6/0/0 | 6/0/0 | 持平（vec_07 重建后恢复） |
+| one-level/concat | 3/0/1 | 4/0/0 | **TIMEOUT→PASS** |
+| one-level/transpose | 4/0/0 | 4/0/0 | 持平 |
+| one-level/gather | 1/0/0 | 1/0/0 | 持平 |
+| one-level/matmul | 9/7/0 | 9/7/0 | 持平 |
+| one-level/deepseek | 14/7/0 | 14/7/0 | 持平 |
+| one-level/control | 0/6/0 | 0/6/0 | 持平 |
+| one-level/fa | 10/2/0 (12) | 11/0/0 (11) | sfa×2 运行 FAIL→编译 FAIL，+1 Tm4_Tk8 PASS |
+| one-level/flashMLA | 2/0/0 | 2/0/0 | 持平 |
+| one-level/reduction | 5/0/0 | 5/0/0 | 持平 |
+| one-level/multi_thread/matmul | 0/1/0 | 1/0/0 | **FAIL→PASS** |
+| one-level/multi_thread/fa | 1/0/0 | 1/0/0 | 持平 |
+| one-level/multi_thread/vec | 2/0/0 | 2/0/0 | 持平 |
+| one-level/element_wise | 2/0/0 | 2/0/0 | 持平 |
+| one-level/norm | 1/0/0 | 1/0/0 | 持平 |
+
+编译层面（08-19 可编译 → 08-20 不可编译）：
+
+| 类别 | 08-19 编译成功 | 08-20 编译成功 | 退化 |
+|---|---:|---:|---:|
+| fa | 12 | 11 | −1（sfa×2 TMATMUL 契约，+1 Tm4_Tk8 新增） |
+| **合计** | **84** | **83** | **−1** |
+
+> microbenchmark 编译覆盖两轮完全一致（350 ELF，5 个已知编译失败）。
+> one-level 唯一新增编译回归 = fa `sfa`×2（08-19 运行期 FAIL → 08-20 编译期
+> FAIL，无 ELF），被 `fa_softmax_pto Tm4_Tk8` 新增配置（+1 PASS）部分抵消，
+> 净 −1 ELF。broadcast/concat/transpose/gather 共 15 个 `DType` 宏冲突配置
+> 已全部修复。`multi_thread/fa` Makefile 已适配新 PE-local group matmul 语义，
+> 恢复编译。
+
+真实改善 2 例：`concat_scatter_...8000`（08-19 TIMEOUT 90s → 本轮 PASS）、
+`multi_thread/matmul`（08-19 CUBE 断言 → 本轮 PASS）。无真实运行回归——vector
+`trowexpand`/`tcolexpand` ×4 与 `broadcast_vec_07` 曾因早晨 gfrun `4758e93f`
+的 srcTile 越界段错误回归，已被 `78adfe32` 修复，全部恢复 PASS。唯一编译回归
+= fa `sfa`×2（TMATMUL 形状契约）。本轮 344 PASS / 89 FAIL / 0 TIMEOUT，对比
+08-19 的 341 / 92 / 1：**PASS +3**（concat TIMEOUT→PASS、multi_thread/matmul
+FAIL→PASS、fa sfa×2 运行 FAIL→编译 FAIL 排除 + Tm4_Tk8 新增 PASS），**FAIL −3**，
+**TIMEOUT −1**。
+
+---
+
+# 历史验证记录 — 2026-08-19
+
+> **历史基线**：gfrun `01f9ec10`，llvm-project `86959776b`（temp/shared-tload-integration-20260811），TileOP-API `8b2ee78`，434 ELF。
 
 # gfrun 执行结果汇总 — 2026-08-19
 
