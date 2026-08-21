@@ -1,8 +1,19 @@
 #!/bin/bash
 # Multi-thread GMMA FlashAttention operator.
+#
+# DTYPE selects the element data type for Q/K/V and the stored O tile (the
+# attention score W and output-accumulator tiles stay FP32 inside the kernel).
+# Supported: float, __bf16, __half. Non-float builds emit a _DType<dtype> ELF
+# suffix so binaries of different dtypes don't collide.
 
 : "${COMPILER_DIR:?Set COMPILER_DIR to the Linx compiler bin directory}"
 
+# FP32 (default): unchanged ELF name kernel_multi_thread_fa_Sq128_Skv64_Tm16_Tk16.elf
 make TESTCASE=fa_2d_unroll_gmma \
     COMPILER_DIR="$COMPILER_DIR" \
-    Sq=128 Skv=64 Tm=16 Tk=16
+    DTYPE=float Sq=256 Skv=256 Tm=64 Tk=64
+
+# BF16: emits kernel_multi_thread_fa_Sq128_Skv64_Tm16_Tk16_DType__bf16.elf
+make TESTCASE=fa_2d_unroll_gmma \
+    COMPILER_DIR="$COMPILER_DIR" \
+    DTYPE=__bf16 Sq=256 Skv=256 Tm=128 Tk=64

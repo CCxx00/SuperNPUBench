@@ -5,6 +5,13 @@
 #include "benchmark.h"
 #include "fileop.h"
 
+// Element data type for Q/K/V and the stored O tile. Set via -DDTYPE=<token>
+// from the Makefile (float / __bf16 / __half). The score (W) and output
+// accumulator tiles remain FP32 inside the kernel template.
+#ifndef DTYPE
+#define DTYPE float
+#endif
+
 #define B 1
 #define H 1
 
@@ -44,7 +51,7 @@
 #define ALIGN (4 * 1024)
 
 int main() {
-    using dtype = float;
+    using dtype = DTYPE;
     constexpr int kPeNum = 4;
 
     static_assert(globSq % kPeNum == 0,
