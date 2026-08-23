@@ -7,8 +7,8 @@
 #include "broadcast/broadcast_vec_07.hpp"
 
 
-#ifndef DType
-#define DType int32_t
+#ifndef DATA_TYPE
+#define DATA_TYPE int32_t
 #endif
 
 #ifndef tMs
@@ -51,7 +51,7 @@
 #endif
 
 int main() {
-    using dtype = DType;
+    using dtype = DATA_TYPE;
     size_t in_shape[MAX_DIMs] = {IN_SHAPEs};
     size_t out_shape[MAX_DIMs] = {OUT_SHAPEs};
 

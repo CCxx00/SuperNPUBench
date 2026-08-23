@@ -5,6 +5,13 @@
 #include "benchmark.h"
 #include "fileop.h"
 
+// Element data type for the A/B input tiles. Set via -DDTYPE=<token> from the
+// Makefile (float / __bf16 / __half). The output C tile stays FP32 inside the
+// kernel template (see matmul_shared.hpp).
+#ifndef DTYPE
+#define DTYPE float
+#endif
+
 #ifndef globM
 #define globM 256
 #endif
@@ -37,7 +44,7 @@
 #define ALIGN (4 * 1024)
 
 int main() {
-    using dtype = float;
+    using dtype = DTYPE;
     constexpr int kPeNum = 4;
 
     static_assert(globM % kPeNum == 0,

@@ -77,7 +77,9 @@ int main() {
 #endif
 
     BENCHSTART;
+#pragma clang loop unroll(full)
     for (int i = 0; i < B; ++i) {
+#pragma clang loop unroll(full)
         for (int j = 0; j < H; ++j) {
             // All four PEs load the same full shared Q/K/V tiles (PEMask=1),
             // so the kernel receives the full globSq / globSkv (mirrors

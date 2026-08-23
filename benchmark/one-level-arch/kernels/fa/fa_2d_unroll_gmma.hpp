@@ -123,25 +123,24 @@ void flash_attention_2d_unroll_shared_impl(dtype *out_ptr, dtype *q_ptr,
     using tileW = Tile<Location::Vec, float, kPeTm, kTk, BLayout::RowMajor>;
     using tileWCast = Tile<Location::Vec, dtype,
                            kPeTm, kTk, BLayout::RowMajor>;
-    // tilePLeft is the PE-local probability tile converted back to a tmatmul lhs:
-    //   physical [kTm,kTk], valid P_pe [kPeTm,kTk]. The padded physical rows
-    //   satisfy the Cube Left layout while only the PE-local rows participate.
-    using tilePPadded = Tile<Location::Vec, dtype, kTm, kTk,
-                             BLayout::RowMajor, kPeTm, kTk>;
-    using tilePLeft = TileLeft<dtype, kTm, kTk, kPeTm, kTk>;
+    // tilePLeft is the PE-local probability tile converted back to a tmatmul
+    // lhs. Like matmul_shared's local C path, every PE describes only its own
+    // [kPeTm,kTk] slice; the four PE-local tiles logically form P_big.
+    using tilePPadded =
+        Tile<Location::Vec, dtype, kPeTm, kTk, BLayout::RowMajor>;
+    using tilePLeft = TileLeft<dtype, kPeTm, kTk>;
 
     // PV/output tiles:
     //   TMATMUL(P_pe, V_shared) -> PV_pe [kPeTm, vD]
     //   current PE receives PV_pe/tileO [kPeTm, vD].
     //   tileO accumulates the online-softmax numerator for this PE row slice.
     //   tileOCast is the dtype tile stored to gmO.
-    // The local/shared-right PV matmul requires physical C.Rows == A.Rows.
-    // Keep kTm physical rows for Cube layout and mark only kPeTm rows valid.
-    using tileO = Tile<Location::Vec, float, kTm, vD, BLayout::ColMajor,
-                       kPeTm, vD>;
+    // P is PE-local while V is shared, so this is the local-A/shared-B
+    // TMATMUL form. Its local C has the same row count as the local A:
+    // [kPeTm,vD]. No full-kTm physical output container is needed.
+    using tileO =
+        Tile<Location::Vec, float, kPeTm, vD, BLayout::RowMajor>;
     using tileOCast =
-        Tile<Location::Vec, dtype, kTm, vD, BLayout::ColMajor, kPeTm, vD>;
-    using tileOStoreWindow =
         Tile<Location::Vec, dtype, kPeTm, vD, BLayout::RowMajor>;
 
     // Online softmax row-state tiles. Each PE owns kPeTm independent query
@@ -161,9 +160,7 @@ void flash_attention_2d_unroll_shared_impl(dtype *out_ptr, dtype *q_ptr,
     // wrapper; SharedTile itself is intentionally not an iterator tile type.
     using itK = global_iterator<gmK, tileKLocal>;
     using itV = global_iterator<gmV, tileVLocal>;
-    // Iterator stride follows the PE-local valid slice rather than tileO's
-    // padded physical kTm rows.
-    using itO = global_iterator<gmO, tileOStoreWindow>;
+    using itO = global_iterator<gmO, tileOCast>;
 
     itQ gIterQ(q_ptr);
     itK gIterK(k_ptr);
@@ -177,6 +174,7 @@ void flash_attention_2d_unroll_shared_impl(dtype *out_ptr, dtype *q_ptr,
     constexpr int Qb = (Sq + kTm - 1) / kTm;
     constexpr int Kb = (Skv + kTk - 1) / kTk;
 
+#pragma clang loop unroll(full)
     for (int i = 0; i < Qb; ++i) {
         tileQ tQ;
 
@@ -302,9 +300,8 @@ void flash_attention_2d_unroll_shared_impl(dtype *out_ptr, dtype *q_ptr,
             //     PV_big = P_big * V_big, shape [kTm, vD]
             //   Physical output:
             //     tPV is the current PE's ordinary PV_pe [kPeTm, vD].
-            // Pad only the physical container: the valid probability region
-            // remains [kPeTm,kTk]. TCVT then sees identical 16x16 physical
-            // source/destination shapes, as required by PTO 0.58.1.
+            // Source and destination are both the current PE's physical
+            // [kPeTm,kTk] tile; no full-kTm padding is introduced.
             TINSERT(tPPadded, tExpW, 0, 0);
             TCVT(tPLeft, tPPadded);
             TMATMUL(tPV, tPLeft, tV);

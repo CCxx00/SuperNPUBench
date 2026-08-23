@@ -7,8 +7,8 @@
 #include "broadcast/broadcast_nocopyout.hpp"
 
 
-#ifndef DType
-#define DType int32_t
+#ifndef DATA_TYPE
+#define DATA_TYPE int32_t
 #endif
 
 #ifndef tMs
@@ -55,7 +55,7 @@
 // main
 // ============================================================================
 int main() {
-    using dtype = DType;
+    using dtype = DATA_TYPE;
     size_t in_shape[MAX_DIMs] = {IN_SHAPEs};
     size_t out_shape[MAX_DIMs] = {OUT_SHAPEs};
 

@@ -8,8 +8,8 @@
 #include "transpose/transpose.hpp"
 
 
-#ifndef DType
-#define DType int32_t
+#ifndef DATA_TYPE
+#define DATA_TYPE int32_t
 #endif
 
 #ifndef tMs
@@ -93,7 +93,7 @@
 
 
 int main() {
-    using dtype = DType;
+    using dtype = DATA_TYPE;
     uint32_t in_shape[128] = {IN_SHAPEs};
     uint32_t out_shape[128] = {OUT_SHAPEs};
     size_t in_dim = IN_DIMs;

@@ -7,8 +7,8 @@
 #include "gather/gather.hpp"
 
 
-#ifndef DType
-#define DType float
+#ifndef DATA_TYPE
+#define DATA_TYPE float
 #endif
 
 #ifndef OType
@@ -48,7 +48,7 @@
 // main
 // ============================================================================
 int main() {
-    using dtype = DType;
+    using dtype = DATA_TYPE;
     using otype = OType;
     // ==========================
     // 申明空间，留出静态偏移空间

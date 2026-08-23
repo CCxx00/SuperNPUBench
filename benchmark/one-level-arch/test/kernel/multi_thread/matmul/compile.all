@@ -1,16 +1,38 @@
 #!/bin/bash
 # Multi-thread GMMA matmul operator.
+#
+# DTYPE selects the element data type for the A/B input tiles (the output C
+# tile is always FP32 inside the kernel). Supported: float, __bf16, __half.
+# Non-float builds emit a _DType<dtype> ELF suffix so binaries of different
+# dtypes don't collide.
 
 : "${COMPILER_DIR:?Set COMPILER_DIR to the Linx compiler bin directory}"
 
 # Build the baseline SharedTile kernel and the variant that reuses Shared B
-# across all M blocks in the same N block.
-make TESTCASE=matmul_shared \
+# across all M blocks in the same N block. FP32 (default): no ELF suffix.
+make diss TESTCASE=matmul_shared \
     COMPILER_DIR="$COMPILER_DIR" \
-    B=1 M=256 N=256 K=256 \
-    tM=32 tN=32 tK=32
+    DTYPE=float B=1 M=256 N=256 K=256 \
+    tM=128 tN=64 tK=64
 
-make TESTCASE=matmul_reuseB \
+make diss TESTCASE=matmul_reuseB \
     COMPILER_DIR="$COMPILER_DIR" \
-    B=1 M=256 N=256 K=256 \
-    tM=32 tN=32 tK=32
+    DTYPE=float B=1 M=256 N=256 K=256 \
+    tM=128 tN=64 tK=64
+
+# BF16 inputs: emits ..._tK64_DType__bf16.elf
+make diss TESTCASE=matmul_shared COMPILER_DIR="$COMPILER_DIR" \
+    DTYPE=__bf16 B=1 M=256 N=256 K=256 tM=128 tN=64 tK=64
+
+# FP16 inputs: emits ..._tK64_DType__half.elf
+make diss TESTCASE=matmul_shared COMPILER_DIR="$COMPILER_DIR" \
+    DTYPE=__half B=1 M=256 N=256 K=256 tM=128 tN=64 tK=64
+
+# Low-precision SharedTile matmul. HIFP8/HIF4X2/MXFP8/MXFP4 load A/B scales.
+# HIF4X2 stores two logical FP4 values per __fp4_hif4x2 element, so its
+# physical K extent is K/2 and one scale byte covers 16 packed K elements.
+for mode in FP8 HIFP8 HIF4X2 MXFP8 MXFP4; do
+    make diss TESTCASE=matmul_lowp LP_MODE="$mode" \
+        COMPILER_DIR="$COMPILER_DIR" \
+        B=1 M=256 N=256 K=256 tM=128 tN=64 tK=64
+done

@@ -8,12 +8,17 @@
 
 : "${COMPILER_DIR:?Set COMPILER_DIR to the Linx compiler bin directory}"
 
-# FP32 (default): unchanged ELF name kernel_multi_thread_fa_Sq128_Skv64_Tm16_Tk16.elf
-make TESTCASE=fa_2d_unroll_gmma \
+# FP32 (default): emits kernel_multi_thread_fa_Sq256_Skv256_Tm64_Tk64.elf
+make diss TESTCASE=fa_2d_unroll_gmma \
     COMPILER_DIR="$COMPILER_DIR" \
     DTYPE=float Sq=256 Skv=256 Tm=64 Tk=64
 
-# BF16: emits kernel_multi_thread_fa_Sq128_Skv64_Tm16_Tk16_DType__bf16.elf
-make TESTCASE=fa_2d_unroll_gmma \
+# BF16: emits kernel_multi_thread_fa_Sq256_Skv256_Tm64_Tk64_DType__bf16.elf
+make diss TESTCASE=fa_2d_unroll_gmma \
     COMPILER_DIR="$COMPILER_DIR" \
-    DTYPE=__bf16 Sq=256 Skv=256 Tm=128 Tk=64
+    DTYPE=__bf16 Sq=256 Skv=256 Tm=64 Tk=64
+
+# FP16: emits kernel_multi_thread_fa_Sq256_Skv256_Tm64_Tk64_DType__half.elf
+make diss TESTCASE=fa_2d_unroll_gmma \
+    COMPILER_DIR="$COMPILER_DIR" \
+    DTYPE=__half Sq=256 Skv=256 Tm=64 Tk=64
