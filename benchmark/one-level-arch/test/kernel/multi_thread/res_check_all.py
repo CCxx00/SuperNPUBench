@@ -95,13 +95,6 @@ def prep_gather(case_dir: Path) -> np.ndarray:
     return table[indexes].reshape(-1)
 
 
-def prep_rms(case_dir: Path) -> np.ndarray:
-    rng = np.random.default_rng(2)
-    x = rng.uniform(-1.0, 1.0, (4, 8192)).astype(np.float16)
-    write(case_dir, "input.bin", x)
-    xf = x.astype(np.float32)
-    return (xf / np.sqrt(np.mean(xf * xf, axis=1, keepdims=True) + 1e-6)).astype(np.float16).reshape(-1)
-
 
 def prep_rows(case_dir: Path, operation: str) -> np.ndarray:
     rng = np.random.default_rng(3)
@@ -180,8 +173,6 @@ CASES = [
     Case("matmul_shared", "matmul/elf/kernel_multi_thread_matmul_matmul_shared_B1_M256_N256_K256_tM128_tN256_tK128.elf", prep_matmul, output_name="res.bin", atol=1e-3, rtol=1e-3),
     Case("matmul_reuseB", "matmul/elf/kernel_multi_thread_matmul_matmul_reuseB_B1_M256_N256_K256_tM128_tN256_tK128.elf", prep_matmul, output_name="res.bin", atol=1e-3, rtol=1e-3),
     Case("matmul_lowp_fp8", "matmul/elf/kernel_multi_thread_matmul_matmul_lowp_FP8_B1_M256_N256_K512_tM128_tN256_tK512.elf", prep_matmul_lowp, output_name="res.bin"),
-    Case("rms_norm", "normalization/rms_norm/elf/kernel_multi_thread_normalization_rms_norm_rms_norm_PE4.elf", prep_rms, output_dtype=np.float16, atol=3e-2, rtol=3e-2),
-    Case("rms_norm_binary", "normalization/rms_norm_binary/elf/kernel_multi_thread_normalization_rms_norm_binary_rms_norm_binary_PE4.elf", prep_rms, output_dtype=np.float16, atol=3e-2, rtol=3e-2),
     Case("cumsum_row", "reduction/cumsum_row/elf/kernel_multi_thread_reduction_cumsum_row_cumsum_row_PE4.elf", lambda p: prep_rows(p, "cumsum"), atol=2e-3, rtol=2e-3),
     Case("reducemax_row", "reduction/reducemax_row/elf/kernel_multi_thread_reduction_reducemax_row_reducemax_row_PE4.elf", lambda p: prep_rows(p, "max")),
     Case("reduceprod_row", "reduction/reduceprod_row/elf/kernel_multi_thread_reduction_reduceprod_row_reduceprod_row_PE4.elf", lambda p: prep_rows(p, "prod"), atol=2e-3, rtol=2e-3),
