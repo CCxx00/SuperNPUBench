@@ -1,15 +1,14 @@
 // ============================================================================
 // Broadcast (B,1,K) -> (B,N,K) — PTO 一层编程模型
 //
-// 原始 broadcast_vec_019.hpp 策略:
-//   TCOPYIN (kTileBatch,K) -> __vec__ 行复制 (K 个元素复制 N 次) -> TCOPYOUT (kTileBatch,N*K)
-//   __vec__ 块: dst[batch*RowStride + copy*K + x] = src[batch*RowStride + x]
-//
 // PTO 一层策略:
 //   TLOAD (kTileBatch,K) -> TINSERT × N (将输入 tile 插入输出 tile 的 N 个列偏移) -> TSTORE (kTileBatch,N*K)
 //   TINSERT 语义: dst[indexRow+i, indexCol+j] = src[i,j]
 //   对 copy c = 0..N-1: TINSERT(outTile, inTile, 0, c*K)
 //   N 次插入互不重叠, 合起来恰好填满输出 tile 的 valid 区域
+//
+// 合并自原 broadcast_vec_019 / broadcast_vec_039 —— 两者算法相同，
+// 仅 tileCols 和 power-of-2 约束方向不同，已统一为模板参数。
 //
 // ┌─────────────────────────────────────────────────────────────────────────┐
 // │                    当前编译器不支持 / 不完整的指令汇总                   │
@@ -29,33 +28,10 @@
 // │          │ 二层实现         │ 当前编译器名 TCOPYOUT；                   │
 // │          │                  │ jcore/TCopyOut.hpp 用 __vec__ 实现       │
 // └──────────┴──────────────────┴──────────────────────────────────────────┘
-//
-// PTO ISA 文档签名 (Declared in include/pto/pto_instr.hpp):
-//
-//   TLOAD:
-//     template <typename TileData, typename GlobalData, typename... WaitEvents>
-//     PTO_INST RecordEvent TLOAD(TileData &dst, GlobalData &src,
-//                                WaitEvents &... events);
-//
-//   TINSERT:
-//     template <typename DstTileData, typename SrcTileData, typename... WaitEvents>
-//     PTO_INST RecordEvent TINSERT(DstTileData &dst, SrcTileData &src,
-//                                  uint16_t indexRow, uint16_t indexCol,
-//                                  WaitEvents &... events);
-//     语义: dst[indexRow+i, indexCol+j] = src[i,j]
-//           for 0 <= i < src.ValidRow, 0 <= j < src.ValidCol
-//
-//   TSTORE:
-//     template <typename TileData, typename GlobalData,
-//               AtomicType atomicType = AtomicType::AtomicNone,
-//               typename... WaitEvents>
-//     PTO_INST RecordEvent TSTORE(GlobalData &dst, TileData &src,
-//                                 WaitEvents &... events);
 // ============================================================================
 
 #include <common/pto_tile.hpp>
 #include <common/global_iterator.hpp>
-// #include <pto/pto_instr.hpp>            // [!] PTO ISA C++ Intrinsic — 当前编译器未提供
 
 #include <cstdint>
 #include <cstdio>
@@ -68,7 +44,7 @@
 //   Output: [B][N][K] -> flat = B*N*K,     batch b data at offset b*N*K
 //   Broadcast along dim1: 1 -> N, dim0 & dim2 preserved.
 //
-// Template params (与原 broadcast_vec_019 一致):
+// Template params:
 //   dtype      - data type (__half, float, etc.)
 //   MAX_DIM    - max dimensions (kept for compat)
 //   IN_DIM     - input dim count (kept for compat)
@@ -76,16 +52,17 @@
 //   gIM        - total input elements  = B * K
 //   gOM        - total output elements = B * N * K
 //   kTileBatch - batches per tile, power-of-2
-//   kInner     - inner dimension K (e.g. 49, need not be power-of-2)
+//   kInner     - inner dimension K
+//   TileCols   - physical tile column count (must >= N*K), default 512
 // =====================================================================
 
 template<typename dtype, size_t MAX_DIM = 8, size_t IN_DIM, size_t OUT_DIM,
-         size_t gIM, size_t gOM, size_t kTileBatch, size_t kInner>
+         size_t gIM, size_t gOM, size_t kTileBatch, size_t kInner,
+         size_t TileCols = 512>
 void broadcast(dtype *in_ptr, dtype *out_ptr,
                const size_t * /*in_shape*/, const size_t * /*out_shape*/) {
     constexpr size_t kBCast = gOM / gIM;
     constexpr size_t kBatch = gIM / kInner;
-    constexpr size_t tileCols = 512;
 
     static_assert(gOM % gIM == 0,
                   "gOM must be divisible by gIM for (B,1,K)->(B,N,K) broadcast");
@@ -93,14 +70,12 @@ void broadcast(dtype *in_ptr, dtype *out_ptr,
                   "gIM must be divisible by kInner (B = gIM/kInner must be integer)");
     static_assert((kTileBatch & (kTileBatch - 1)) == 0,
                   "kTileBatch must be power of 2 for 512B tile alignment");
-    static_assert((kBCast & (kBCast - 1)) == 0,
-                  "kBCast (N) must be power of 2 for bitwise division in SIMT");
-    static_assert(tileCols >= kBCast * kInner,
-                  "padded tileCols (512) must >= broadcast target width (N*K)");
+    static_assert(TileCols >= kBCast * kInner,
+                  "TileCols must >= broadcast target width (N*K)");
 
-    using tile_in  = Tile<Location::Vec, dtype, kTileBatch, tileCols,
+    using tile_in  = Tile<Location::Vec, dtype, kTileBatch, TileCols,
                           BLayout::RowMajor, kTileBatch, kInner>;
-    using tile_out = Tile<Location::Vec, dtype, kTileBatch, tileCols,
+    using tile_out = Tile<Location::Vec, dtype, kTileBatch, TileCols,
                           BLayout::RowMajor, kTileBatch, kBCast * kInner>;
     using gm_in    = global_tensor<dtype, RowMajor<kTileBatch, kInner>>;
     using gm_out   = global_tensor<dtype, RowMajor<kTileBatch, kBCast * kInner>>;
@@ -115,26 +90,19 @@ void broadcast(dtype *in_ptr, dtype *out_ptr,
         gm_in gsrc(in_ptr + i * kTileBatch * kInner);
         gm_out gdst(out_ptr + i * kTileBatch * kBCast * kInner);
 
-        // TLOAD: GM -> UB, 加载 (kTileBatch, kInner) 输入 tile
-        // [当前编译器] 名为 TCOPYIN, jcore 为 __vec__
         TLOAD(inTile, gsrc);
 
-        // TINSERT × kBCast: 将输入 tile 插入输出 tile 的 N 个列偏移
-        // 每次 TINSERT 写入 kInner 列, N 次互不重叠, 合起来填满 N*kInner 列
-        // [当前编译器] 完全缺失! pto_tileop.hpp 无 TINSERT API
         #pragma clang loop unroll(full)
         for (size_t c = 0; c < kBCast; c++) {
             TINSERT(outTile, inTile, /*indexRow=*/0, /*indexCol=*/(uint16_t)(c * kInner));
         }
 
-        // TSTORE: UB -> GM, 写回 (kTileBatch, kBCast*kInner) 输出 tile
-        // [当前编译器] 名为 TCOPYOUT, jcore 为 __vec__
         TSTORE(gdst, outTile);
     }
 
-    using tile_in_r  = Tile<Location::Vec, dtype, kTileBatch, tileCols,
+    using tile_in_r  = Tile<Location::Vec, dtype, kTileBatch, TileCols,
                             BLayout::RowMajor, rmd, kInner>;
-    using tile_out_r = Tile<Location::Vec, dtype, kTileBatch, tileCols,
+    using tile_out_r = Tile<Location::Vec, dtype, kTileBatch, TileCols,
                             BLayout::RowMajor, rmd, kBCast * kInner>;
     tile_in_r inTile_rmd;
     tile_out_r outTile_rmd;
