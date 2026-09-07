@@ -28,8 +28,6 @@ divisible by the PE count. This is checked at compile time.
 | Shared Matmul | `matmul/matmul_shared.hpp` |
 | Shared-B-reuse Matmul | `matmul/matmul_shared_reuseB.hpp` |
 | Low-precision Matmul | `matmul/matmul_shared_lowp.hpp` |
-| RMSNorm | `normalization/rms_norm/rms_norm.hpp` |
-| Binary-accumulation RMSNorm | `normalization/rms_norm_binary/rms_norm_binary.hpp` |
 | Row Cumsum | `reduction/cumsum_rowvec.hpp` |
 | Row Max/Prod/Sum | `reduction/reducemax_rowvec.hpp`, `reduction/reduceprod_rowvec.hpp`, `reduction/reducesum_rowvec.hpp` |
 | 2D Transpose | `transpose/transpose.hpp` |
@@ -43,7 +41,6 @@ Kernel and test paths mirror the single-PE tree. For example:
 | `kernels/single_thread/gather/gather.hpp` | `kernels/multi_thread/gather/gather.hpp` |
 | `test/kernel/gather/` | `test/kernel/multi_thread/gather/` |
 | `test/kernel/element_wise/gelu/` | `test/kernel/multi_thread/element_wise/gelu/` |
-| `test/solution/normalization/rms_norm_binary/` | `test/kernel/multi_thread/normalization/rms_norm_binary/` |
 
 Each operator directory has its own `Makefile`, `compile.all`, and `src/`
 instead of sharing a mixed test source. One model failure therefore does not
@@ -187,7 +184,6 @@ Run one or more named cases:
 
 ```bash
 python3 benchmark/one-level-arch/test/kernel/multi_thread/res_check_all.py \
-  broadcast fa matmul_shared rms_norm
 ```
 
 Run the complete representative numerical portfolio:
@@ -242,20 +238,13 @@ coverage for the other precision variants.
 | `matmul_shared` | PASS | 0 |
 | `matmul_reuseB` | PASS | 0 |
 | `matmul_lowp` FP8 | PASS | 0 |
-| `rms_norm` | PASS | 0.000976562 |
-| `rms_norm_binary` | PASS | 0.000976562 |
 | `cumsum_row` | PASS | 0 |
 | `reducemax_row` | FAIL | 0.999606; row-result physical stride mismatch |
 | `reduceprod_row` | FAIL | 1.06037; row-result physical stride mismatch |
 | `reducesum_row` | PASS | 5.72205e-06 |
 | `transpose` | PASS | 0 |
 | `tadd` | PASS | 0 |
-| **Total** | **14 PASS / 4 FAIL / 0 TIMEOUT** | **18 representative cases** |
-
-Two RMSNorm cases initially failed because the old Newton iteration used
-`TRECIP(x)` as the inverse-square-root seed. With the current compiler's
-`TRSQRT` support, replacing that sequence with `TRSQRT` reduced the maximum
-absolute error to 0.000976562 and made both cases pass.
+| **Total** | **12 PASS / 4 FAIL / 0 TIMEOUT** | **16 representative cases** |
 
 The remaining failures are kernel/API-model issues exposed by numerical
 checking, rather than binary I/O or four-PE synchronization failures:

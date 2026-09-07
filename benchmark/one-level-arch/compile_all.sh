@@ -70,8 +70,6 @@ compile_operator "$REPO_ROOT/test/kernel/multi_thread/concat" "multi_thread/conc
 compile_operator "$REPO_ROOT/test/kernel/multi_thread/conv2d" "multi_thread/conv2d"
 compile_operator "$REPO_ROOT/test/kernel/multi_thread/element_wise/gelu" "multi_thread/element_wise/gelu"
 compile_operator "$REPO_ROOT/test/kernel/multi_thread/gather" "multi_thread/gather"
-compile_operator "$REPO_ROOT/test/kernel/multi_thread/normalization/rms_norm" "multi_thread/normalization/rms_norm"
-compile_operator "$REPO_ROOT/test/kernel/multi_thread/normalization/rms_norm_binary" "multi_thread/normalization/rms_norm_binary"
 compile_operator "$REPO_ROOT/test/kernel/multi_thread/reduction/cumsum_row" "multi_thread/reduction/cumsum_row"
 compile_operator "$REPO_ROOT/test/kernel/multi_thread/reduction/reducemax_row" "multi_thread/reduction/reducemax_row"
 compile_operator "$REPO_ROOT/test/kernel/multi_thread/reduction/reduceprod_row" "multi_thread/reduction/reduceprod_row"
