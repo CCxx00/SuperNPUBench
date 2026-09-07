@@ -43,7 +43,7 @@ Kernel and test paths mirror the single-PE tree. For example:
 | `kernels/single_thread/gather/gather.hpp` | `kernels/multi_thread/gather/gather.hpp` |
 | `test/kernel/gather/` | `test/kernel/multi_thread/gather/` |
 | `test/kernel/element_wise/gelu/` | `test/kernel/multi_thread/element_wise/gelu/` |
-| `test/kernel/normalization/rms_norm_binary/` | `test/kernel/multi_thread/normalization/rms_norm_binary/` |
+| `test/solution/normalization/rms_norm_binary/` | `test/kernel/multi_thread/normalization/rms_norm_binary/` |
 
 Each operator directory has its own `Makefile`, `compile.all`, and `src/`
 instead of sharing a mixed test source. One model failure therefore does not
